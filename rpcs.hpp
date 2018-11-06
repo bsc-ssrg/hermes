@@ -23,12 +23,24 @@ namespace hermes {
 class request;
 class mutable_buffer;
 
+namespace detail {
+    template <
+        typename ExecutionContext, 
+        typename MercuryInput, 
+        typename MercuryOutput,
+        typename RpcOutput>
+    void
+    forward(ExecutionContext* ctx,
+            MercuryInput&& input);
+}
+
 /** Valid RPCs */
 enum class rpc {
     __reserved__ = 0,  //XXX for some reason hg_id_t cannot be 0
     send_message,
     send_file,
     send_buffer,
+    shutdown,
     __end_count__
 };
 
@@ -37,7 +49,8 @@ static const char* const rpc_names[] = {
     "__reserved__",
     "send_message",
     "send_file",
-    "send_buffer"
+    "send_buffer",
+    "shutdown"
 };
 
 /** enum class hash (required for upcoming std::unordered_maps */
@@ -60,7 +73,7 @@ MERCURY_GEN_PROC(send_message_in_t,
         ((hg_const_string_t) (message)))
 
 MERCURY_GEN_PROC(send_message_out_t,
-        ((int32_t) (ret_val)))
+        ((int32_t) (retval)))
 
 
 /** Generate types and serialization functions for rpc::send_file */
@@ -69,7 +82,7 @@ MERCURY_GEN_PROC(send_file_in_t,
         ((hg_bulk_t) (bulk_handle)))
 
 MERCURY_GEN_PROC(send_file_out_t,
-        ((int32_t) (ret_val)))
+        ((int32_t) (retval)))
 
 
 /** Generate types and serialization functions for rpc::send_file */
@@ -78,7 +91,15 @@ MERCURY_GEN_PROC(send_buffer_in_t,
         ((hg_bulk_t) (bulk_handle)))
 
 MERCURY_GEN_PROC(send_buffer_out_t,
-        ((int32_t) (ret_val)))
+        ((int32_t) (retval)))
+
+
+/** Generate types and serialization functions for rpc::shutdown */
+//MERCURY_GEN_PROC(shutdown_in_t,
+//        ())
+//
+//MERCURY_GEN_PROC(shutdown_out_t,
+//        ((int32_t) (retval)))
 
 
 namespace detail { 
@@ -137,7 +158,7 @@ public:
     }
 
 private:
-    explicit send_file_args(send_file_in_t input) :
+    explicit send_file_args(const send_file_in_t& input) :
         m_pathname(input.pathname),
         m_exposed_memory(input.bulk_handle) { }
 
@@ -186,7 +207,45 @@ private:
     exposed_memory m_exposed_memory;
 };
 
-class send_buffer_retval { };
+class send_buffer_retval {
+
+    friend class async_engine;
+
+    template <
+        typename ExecutionContext, 
+        typename MercuryInput, 
+        typename MercuryOutput,
+        typename RpcOutput>
+    friend void
+    detail::forward(ExecutionContext* ctx,
+                    MercuryInput&& input);
+
+public:
+    send_buffer_retval() { }
+    send_buffer_retval(int32_t retval) :
+        m_retval(retval) { }
+
+    int32_t
+    retval() const {
+        return m_retval;
+    }
+
+    void
+    set_retval(int32_t retval) {
+        m_retval = retval;
+    }
+
+private:
+    explicit send_buffer_retval(const send_buffer_out_t& out) {
+        m_retval = out.retval;
+    }
+
+    explicit operator send_buffer_out_t() {
+        return {m_retval};
+    }
+
+    int32_t m_retval;
+};
 
 
 
@@ -247,8 +306,6 @@ struct rpc_descriptor<rpc::send_message> : public rpc_descriptor_base {
     using mercury_input_type = send_message_in_t;
     using mercury_output_type = send_message_out_t;
 
-    // convenience typedef
-    using utype = std::underlying_type<event>::type;
 
     using input_arg_type = send_message_in_t;
     using output_arg_type = send_message_out_t;
@@ -268,42 +325,25 @@ struct rpc_descriptor<rpc::send_message> : public rpc_descriptor_base {
 
     template <typename Callable>
     void
-    set_handler(const event trigger, 
-                Callable&& handler) {
-
-        switch(trigger) {
-            case event::on_arrival:
-            case event::on_completion:
-                m_handlers[static_cast<utype>(trigger)] = 
-                    std::forward<Callable>(handler);
-                break;
-            default:
-                throw std::runtime_error("Unexpected event");
-        }
+    set_user_handler(Callable&& handler) {
+        m_user_handler = std::forward<Callable>(handler);
     }
 
-    output_type
-    invoke_handler(const event trigger,
-                   const request& req,
-                   const input_type& args) {
+    template <typename Request, typename Input>
+    void
+    invoke_user_handler(Request&& req,
+                        Input&& args) {
 
-        switch(trigger) {
-            case event::on_arrival:
-            case event::on_completion:
-                if(m_handlers[static_cast<utype>(trigger)]) {
-                    return m_handlers[static_cast<utype>(trigger)](req, args);
-                }
-                break;
-            default:
-                throw std::runtime_error("Unexpected event");
+        if(!m_user_handler) {
+            throw std::runtime_error("User handler not set");
         }
 
-        return output_type();
+        m_user_handler(std::forward<Request>(req), std::forward<Input>(args));
     }
 
-    using handler_type =
-        std::function<output_type(const request&, const input_type&)>;
-    std::array<handler_type, static_cast<utype>(event::count)> m_handlers;
+    using handler_type = 
+        std::function<void(request&&, const input_type&)>;
+    handler_type m_user_handler;
 };
 
 
@@ -317,8 +357,6 @@ struct rpc_descriptor<rpc::send_file> : public rpc_descriptor_base {
     using mercury_input_type = send_file_in_t;
     using mercury_output_type = send_file_out_t;
 
-    // convenience typedef
-    using utype = std::underlying_type<event>::type;
 
     using input_arg_type = send_file_in_t;
     using output_arg_type = send_file_out_t;
@@ -338,42 +376,25 @@ struct rpc_descriptor<rpc::send_file> : public rpc_descriptor_base {
 
     template <typename Callable>
     void
-    set_handler(const event trigger, 
-                Callable&& handler) {
-
-        switch(trigger) {
-            case event::on_arrival:
-            case event::on_completion:
-                m_handlers[static_cast<utype>(trigger)] = 
-                    std::forward<Callable>(handler);
-                break;
-            default:
-                throw std::runtime_error("Unexpected event");
-        }
+    set_user_handler(Callable&& handler) {
+        m_user_handler = std::forward<Callable>(handler);
     }
 
-    output_type
-    invoke_handler(const event trigger, 
-                   const request& req,
-                   const input_type& args) {
+    template <typename Request, typename Input>
+    void
+    invoke_user_handler(Request&& req,
+                        Input&& args) {
 
-        switch(trigger) {
-            case event::on_arrival:
-            case event::on_completion:
-                if(m_handlers[static_cast<utype>(trigger)]) {
-                    return m_handlers[static_cast<utype>(trigger)](req, args);
-                }
-                break;
-            default:
-                throw std::runtime_error("Unexpected event");
+        if(!m_user_handler) {
+            throw std::runtime_error("User handler not set");
         }
 
-        return output_type();
+        m_user_handler(std::forward<Request>(req), std::forward<Input>(args));
     }
 
-    using handler_type =
-        std::function<output_type(const request&, const input_type&)>;
-    std::array<handler_type, static_cast<utype>(event::count)> m_handlers;
+    using handler_type = 
+        std::function<void(request&&, const input_type&)>;
+    handler_type m_user_handler;
 };
 
 
@@ -387,8 +408,6 @@ struct rpc_descriptor<rpc::send_buffer> : public rpc_descriptor_base {
     using mercury_input_type = send_buffer_in_t;
     using mercury_output_type = send_buffer_out_t;
 
-    // convenience typedef
-    using utype = std::underlying_type<event>::type;
 
     using input_arg_type = send_buffer_in_t;
     using output_arg_type = send_buffer_out_t;
@@ -408,43 +427,83 @@ struct rpc_descriptor<rpc::send_buffer> : public rpc_descriptor_base {
 
     template <typename Callable>
     void
-    set_handler(const event trigger, 
-                Callable&& handler) {
-
-        switch(trigger) {
-            case event::on_arrival:
-            case event::on_completion:
-                m_handlers[static_cast<utype>(trigger)] = 
-                    std::forward<Callable>(handler);
-                break;
-            default:
-                throw std::runtime_error("Unexpected event");
-        }
+    set_user_handler(Callable&& handler) {
+        m_user_handler = std::forward<Callable>(handler);
     }
 
-    output_type
-    invoke_handler(const event trigger, 
-                   const request& req,
-                   const input_type& args) {
+    template <typename Request, typename Input>
+    void
+    invoke_user_handler(Request&& req,
+                        Input&& args) {
 
-        switch(trigger) {
-            case event::on_arrival:
-            case event::on_completion:
-                if(m_handlers[static_cast<utype>(trigger)]) {
-                    return m_handlers[static_cast<utype>(trigger)](req, args);
-                }
-                break;
-            default:
-                throw std::runtime_error("Unexpected event");
+        if(!m_user_handler) {
+            throw std::runtime_error("User handler not set");
         }
 
-        return output_type();
+        m_user_handler(std::forward<Request>(req), std::forward<Input>(args));
     }
 
     using handler_type = 
-        std::function<output_type(const request&, const input_type&)>;
-    std::array<handler_type, static_cast<utype>(event::count)> m_handlers;
+        std::function<void(request&&, const input_type&)>;
+    handler_type m_user_handler;
 };
+
+
+/******************************************************************************/
+/** specialized rpc_info for rpc::send_buffer */
+template <>
+struct rpc_descriptor<rpc::shutdown> : public rpc_descriptor_base {
+
+    using input_type = void;
+    using output_type = void;
+    using mercury_input_type = void;
+    using mercury_output_type = void;
+
+
+//    using input_arg_type = send_buffer_in_t;
+//    using output_arg_type = send_buffer_out_t;
+    using message_type = message::simple;
+    using processor = rpc_processor<rpc::shutdown, message_type>;
+    using requires_reply = std::true_type;
+
+    rpc_descriptor() :
+        rpc_descriptor_base(
+            rpc::shutdown,
+            rpc_names[static_cast<int>(rpc::shutdown)],
+            static_cast<hg_id_t>(rpc::shutdown),
+            //hg_hash_string(rpc_names[0]),
+            NULL,
+            NULL,
+            rpc_handler<rpc::shutdown, void>) {}
+
+    template <typename Callable>
+    void
+    set_user_handler(Callable&& handler) {
+        m_user_handler = std::forward<Callable>(handler);
+    }
+
+    template <typename Request, typename Input>
+    void
+    invoke_user_handler(Request&& req,
+                        Input&& args) {
+
+        if(!m_user_handler) {
+            throw std::runtime_error("User handler not set");
+        }
+
+        m_user_handler(std::forward<Request>(req), std::forward<Input>(args));
+    }
+
+    using handler_type = 
+        std::function<void(request&&)>;
+    handler_type m_user_handler;
+};
+
+
+
+
+
+
 
 static const
 std::unordered_map<

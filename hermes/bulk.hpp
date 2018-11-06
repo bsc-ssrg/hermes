@@ -6,7 +6,6 @@
 #include <alloca.h>
 
 #include <hermes/buffer.hpp>
-#include <hermes/request.hpp>
 
 #include <logging.hpp>
 
@@ -27,14 +26,6 @@ enum class access_mode : hg_uint32_t {
 class exposed_memory {
 
     friend class async_engine;
-
-    friend void push(exposed_memory src, exposed_memory dst);
-
-    template <typename Callable>
-    friend void pull(const request&, 
-                     const exposed_memory&, 
-                     const exposed_memory&, 
-                     Callable&&);
 
 public:
 
@@ -182,6 +173,7 @@ private:
     std::vector<mutable_buffer> m_buffers;
 };
 
+#if 0
 void push(exposed_memory src, exposed_memory dst) {
     (void) src;
     (void) dst;
@@ -303,6 +295,7 @@ void pull(const request& req,
            fmt::ptr(hgi->addr), fmt::ptr(&req.m_bulk_handle), 0, 
            fmt::ptr(&bulk_handle), 0, src.size(), ret);
 }
+#endif
 
 } // namespace hermes
 

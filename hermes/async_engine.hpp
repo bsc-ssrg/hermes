@@ -32,6 +32,242 @@
 
 namespace hermes {
 
+namespace detail {
+
+inline hg_handle_t
+create_handle(const hg_context_t* hg_context,
+              const hg_addr_t hg_addr,
+              const hg_id_t hg_id) {
+
+    DEBUG("Creating Mercury handle");
+
+    hg_handle_t handle = HG_HANDLE_NULL;
+
+    hg_return_t ret = HG_Create(
+                // pointer to the HG context
+                const_cast<hg_context_t*>(hg_context),
+                // address of destination
+                const_cast<hg_addr_t>(hg_addr),
+                // registered RPC ID
+                hg_id,
+                // pointer to HG handle
+                &handle);
+
+    DEBUG2("HG_Create(hg_context={}, addr={}, hg_id={}, hg_handle={}) = {}",
+            fmt::ptr(hg_context), fmt::ptr(&hg_addr),
+            hg_id, fmt::ptr(&handle), ret);
+
+    if(ret != HG_SUCCESS) {
+        throw std::runtime_error(
+                std::string("Failed to create handle: ") +
+                HG_Error_to_string(ret));
+    }
+
+    return handle;
+}
+
+inline hg_bulk_t
+create_bulk_handle(hg_class_t* hg_class,
+                   const hg_uint32_t buf_count,
+                   void** buf_ptrs,
+                   const hg_size_t* buf_sizes,
+                   const hg_uint8_t flags) {
+
+    DEBUG("Creating Mercury bulk handle");
+
+    hg_bulk_t bulk_handle = HG_BULK_NULL;
+
+    hg_return_t ret = HG_Bulk_create(
+                    // pointer to Mercury class
+                    hg_class, 
+                    // number of buffers
+                    buf_count,
+                    // array of pointers to buffers 
+                    buf_ptrs,
+                    // array of buffer sizes
+                    buf_sizes,
+                    // flags (e.g. HG_BULK_READ_ONLY, HG_BULK_WRITE_ONLY)
+                    flags,
+                    // pointer to returned bulk handle
+                    &bulk_handle);
+
+    DEBUG2("HG_Bulk_create(hg_class={}, count={}, buf_ptrs={}, buf_sizes={}, "
+           "flags={}, handle={}) = {}", fmt::ptr(hg_class), buf_count,
+           fmt::ptr(buf_ptrs), fmt::ptr(buf_sizes), flags,
+           fmt::ptr(&bulk_handle), ret);
+
+    if(ret != HG_SUCCESS) {
+        throw std::runtime_error("Failed to create bulk handle: " + 
+                std::string(HG_Error_to_string(ret)));
+    }
+
+    return bulk_handle;
+}
+
+template <typename ExecutionContext, 
+          typename MercuryInput, 
+          typename MercuryOutput,
+          typename RpcOutput>
+void
+forward(ExecutionContext* ctx,
+        MercuryInput&& input) {
+
+    DEBUG("Sending the RPC");
+
+    const auto completion_callback = 
+        [](const struct hg_cb_info* cbi) -> hg_return_t {
+
+        if(cbi->ret != HG_SUCCESS) {
+            DEBUG("Forward request failed");
+            return cbi->ret;
+        }
+
+        // decode response
+        MercuryOutput output_val;
+        hg_return_t ret = HG_Get_output(cbi->info.forward.handle, &output_val);
+
+        if(ret != HG_SUCCESS) {
+            throw std::runtime_error(
+                    std::string("Failed to decode RPC response: ") +
+                                HG_Error_to_string(ret));
+        }
+
+        auto* ctx = reinterpret_cast<ExecutionContext*>(cbi->arg);
+
+        // TODO: check if this needs to be done in a critical region
+        ctx->m_parent->m_output = RpcOutput(output_val);
+
+        // clean up resources consumed by this RPC
+
+        HG_Free_output(cbi->info.forward.handle, &output_val);
+        HG_Destroy(cbi->info.forward.handle);
+
+    //    const struct hg_info* hgi = HG_Get_info(ctx->m_handle);
+
+    //    HG_Addr_free(hgi->hg_class, hgi->addr);
+
+
+    //        free(ctx->m_buffer);
+    //    delete ctx;
+
+        return HG_SUCCESS;
+    };
+
+
+    hg_return_t ret = HG_Forward(
+            // Mercury handle
+            ctx->m_handle,
+            // pointer to function callback
+            completion_callback,
+            // pointer to data passed to callback
+            reinterpret_cast<void*>(ctx),
+            // pointer to input structure
+            &input);
+
+    DEBUG2("HG_Forward(handle={}, cb={}, arg={}, input={}) = {}",
+            fmt::ptr(ctx->m_handle), 
+            "lambda::completion_callback",
+            fmt::ptr(ctx), 
+            fmt::ptr(&input), ret);
+
+    if(ret != HG_SUCCESS) {
+        throw std::runtime_error(
+                std::string("Failed to send RPC: ") +
+                HG_Error_to_string(ret));
+    }
+
+
+
+}
+
+
+
+template <typename ExecutionContext, typename Callable>
+inline void
+bulk_transfer(request&& req,
+              ExecutionContext&& ctx,
+              Callable&& completion_callback) {
+
+    const struct hg_info* hgi = HG_Get_info(req.m_handle);
+
+    if(hgi == NULL) {
+        throw std::runtime_error("Failed to retrieve request information "
+                                 "from internal handle");
+    }
+
+    hg_size_t transfer_size = HG_Bulk_get_size(req.m_remote_bulk_handle);
+
+    if(transfer_size == 0) {
+        throw std::runtime_error("Bulk size to transfer is 0");
+    }
+
+    hg_return_t ret = HG_Bulk_transfer(
+            // pointer to Mercury context
+            hgi->context,
+            // pointer to function callback
+            completion_callback,
+            // pointer to data passed to callback
+            reinterpret_cast<void*>(ctx),
+            // transfer operation: pull from client
+            HG_BULK_PULL,
+            // address of origin
+            hgi->addr,
+            // bulk handle from origin
+            req.m_remote_bulk_handle,
+            // origin offset
+            0,
+            // local bulk handle
+            req.m_local_bulk_handle,
+            // local offset
+            0,
+            // size of data to be transferred
+            transfer_size,
+            // pointer to returned operation ID
+            HG_OP_ID_IGNORE);
+
+    DEBUG2("HG_Bulk_transfer(hg_context={}, callback={}, arg={}, op={}, "
+            "addr={}, origin_handle={}, origin_offset={}, local_handle={}, "
+            "local_offset={}, size={}, HG_OP_ID_IGNORE) = {}", 
+            fmt::ptr(hgi->context),
+            "lambda::completion_callback", fmt::ptr(ctx), "HG_BULK_PULL", 
+            fmt::ptr(hgi->addr), fmt::ptr(&req.m_remote_bulk_handle), 0,
+            fmt::ptr(&req.m_local_bulk_handle), 0, transfer_size, ret);
+
+    if(ret != HG_SUCCESS) {
+        throw std::runtime_error("Failed to pull remote data: " +
+                std::string(HG_Error_to_string(ret)));
+    }
+}
+
+template <typename Output>
+inline void
+respond(request&& req, Output&& out) {
+
+    // This is just a best effort response, we don't bother specifying
+    // a callback here for completion
+    hg_return_t ret = HG_Respond(
+                            // handle
+                            req.m_handle,
+                            // callback
+                            NULL,
+                            // arg
+                            NULL,
+                            // output struct
+                            &out);
+
+    DEBUG2("***************** {}", out.retval);
+
+    DEBUG2("HG_Respond(hg_handle={}, callback={}, arg={}, out_struct={}) = {}", 
+           fmt::ptr(req.m_handle), "NULL", "NULL", fmt::ptr(&out), ret);
+
+    if(ret != HG_SUCCESS) {
+        throw std::runtime_error("Failed to respond: " + 
+                std::string(HG_Error_to_string(ret)));
+    }
+}
+
+} // namespace detail
+
 /** Valid transport types (i.e. transport types supported by Mercury) */
 enum class transport_type {
     bmi_tcp = 0, mpi_dynamic, mpi_static, na_sm, cci_tcp, cci_verbs, cci_gni,
@@ -105,20 +341,20 @@ struct address {
 };
 
 /** Context required by the RPC's originator (i.e. the client) */
-template <rpc ID>
-struct origin_context {
+template <rpc ID, typename Handle>
+struct execution_context {
 
-    origin_context(const hg_context_t * const hg_context,
-                   const std::shared_ptr<detail::address>& address,
-                   const RpcInput<ID>& input) :
+    execution_context(Handle* parent,
+                      const hg_context_t * const hg_context,
+                      const std::shared_ptr<detail::address>& address,
+                      const RpcInput<ID>& input) :
+        m_parent(parent),
         m_hg_context(hg_context),
         m_address(address),
         //XXX move rpc_descriptor to detail
         m_rpc_descriptor(detail::rpc_descriptor<ID>()),
         m_input(input),
 //        m_hg_input(m_input),
-    m_size(0),
-    m_buffer(NULL),
     m_handle(NULL),
     m_bulk_handle(NULL)
 
@@ -131,7 +367,7 @@ struct origin_context {
         //PRINT_HG_STATE(DEBUG2, this);
     }
 
-    ~origin_context() { }
+    ~execution_context() { }
 
     const hg_context_t*
     hg_context() const {
@@ -169,6 +405,7 @@ struct origin_context {
 ///        return m_hg_input;
 ///    }
 
+    Handle* m_parent;
     const hg_context_t* const m_hg_context;
     const std::shared_ptr<detail::address> m_address;
     const rpc_descriptor<ID> m_rpc_descriptor;
@@ -178,13 +415,12 @@ struct origin_context {
 
 //    RpcOutputArgTp<ID> m_output_vals;
 
-    hg_size_t m_size;
-    void* m_buffer;
     hg_handle_t m_handle;
     hg_bulk_t m_bulk_handle;
 };
 
 
+#if 0 /// XXX superseded by hermes::request
 /** Context required by the RPC's target (i.e. the server) */
 template <rpc ID>
 struct target_context {
@@ -212,149 +448,49 @@ struct target_context {
     hg_handle_t m_handle;
     hg_bulk_t m_bulk_handle;
 };
-
-/** This class contains the implemtation of common helper functions that can 
- * be used bu all the specializations of rpc_processor<ID, MSG_TYPE> below */
-struct rpc_processor_base {
-
-    /** Create a Mercury handle to represent this RPC */
-    template <rpc ID>
-    static hg_return_t
-    create_hg_handle(origin_context<ID>* ctx) {
-
-        DEBUG("Creating RPC handle");
-
-        hg_return_t ret = HG_Create(
-                // pointer to the HG context
-                const_cast<hg_context_t*>(ctx->m_hg_context),
-                // address of destination
-                ctx->hg_addr(),
-                // registered RPC ID
-                ctx->hg_id(),
-                // pointer to HG handle
-                &ctx->m_handle);
-
-        DEBUG2("HG_Create(hg_context={}, addr={}, hg_id={}, hg_handle={}) = {}",
-                fmt::ptr(ctx->m_hg_context), fmt::ptr(ctx->hg_addr()),
-                ctx->hg_id(), fmt::ptr(&ctx->m_handle), ret);
-
-        return ret;
-    }
-
-    template <rpc ID>
-    static hg_return_t
-    create_hg_bulk_handle(origin_context<ID>* ctx) {
-
-//XXX temporarily disabled
-#if 1
-        DEBUG("Creating bulk RPC handle");
-
-        const struct hg_info* hgi = HG_Get_info(ctx->m_handle);
-
-        if(hgi == NULL) {
-            return HG_OTHER_ERROR;
-        }
-
-        hg_return_t ret = HG_Bulk_create(
-                //TODO
-                hgi->hg_class,
-                //TODO
-                1,
-                //TODO
-                &ctx->m_buffer,
-                //TODO
-                &ctx->m_size,
-                //TODO
-                HG_BULK_READ_ONLY,
-                //TODO
-//                &ctx->m_input_args.bulk_handle);
-
-//        ctx->m_bulk_handle = ctx->m_input_args.bulk_handle;
-
-                &ctx->m_bulk_handle);
-
-        ctx->m_hg_input.bulk_handle = ctx->m_bulk_handle;
-
-
-        DEBUG2("HG_Bulk_create(hg_class={}, count={}, buf_ptrs={}, buf_sizes={}, "
-                "flags={}, handle={}) = {}",
-                fmt::ptr(hgi->hg_class), 1, fmt::ptr(&ctx->m_buffer),
-                fmt::ptr(&ctx->m_size), "HG_BULK_READ_ONLY",
-                fmt::ptr(&ctx->m_bulk_handle), ret);
-
-        return ret;
 #endif
-    }
 
-    template <rpc ID>
-    static hg_return_t
-    forward_hg_rpc(origin_context<ID>* ctx, 
-                   MercuryInput<ID>& input,
-                   hg_cb_t callback) {
-
-        DEBUG("Sending the RPC");
-
-        hg_return_t ret = HG_Forward(
-                //TODO
-                ctx->m_handle,
-                //TODO
-                callback,
-                //TODO
-                static_cast<void*>(ctx),
-                //TODO
-                &input);
-
-        DEBUG2("HG_Forward(handle={}, cb={}, arg={}, input={}) = {}",
-                fmt::ptr(ctx->m_handle), 
-                reinterpret_cast<void*>(callback),
-                fmt::ptr(ctx), 
-                fmt::ptr(&input), ret);
-
-        return ret;
-    }
-};
-
-template <rpc ID, typename MsgTp>
+template <rpc ID, typename Message>
 struct rpc_processor {};
 
 /** 
  * Specialization for sending RPCs that do not require a bulk transfer
  * */
 template <rpc ID>
-struct rpc_processor<ID, message::simple> : public rpc_processor_base {
+struct rpc_processor<ID, message::simple> {
 
-    using SelfType = rpc_processor<ID, message::simple>;
     using RpcInfoTp = rpc_descriptor<ID>;
     using OutputTp = typename RpcInfoTp::output_arg_type;
 
+    template <typename ExecutionContext>
     static hg_return_t
-    submit(origin_context<ID>* ctx) {
+    post(ExecutionContext* ctx) {
+
         DEBUG2("{}(ctx={})", __func__, fmt::ptr(ctx));
 
-        hg_return_t ret = create_hg_handle<ID>(ctx);
+        // create a Mercury handle for the RPC and save it in the RPC's 
+        // execution context
+        ctx->m_handle = detail::create_handle(ctx->m_hg_context,
+                                              ctx->hg_addr(),
+                                              ctx->hg_id());
 
-        if(ret != HG_SUCCESS) {
-            throw std::runtime_error(
-                    std::string("Failed to create handle: ") +
-                    HG_Error_to_string(ret));
-        }
-
+        // convert the hermes RPC input to Mercury RPC input
+        // (this relies on the explicit conversion constructor defined for 
+        // the type)
         auto hg_input = MercuryInput<ID>(ctx->m_input);
 
         // send the RPC
-        ret = forward_hg_rpc<ID>(ctx, 
-                                 hg_input, 
-                                 SelfType::forward_completion_callback);
-
-        if(ret != HG_SUCCESS) {
-            throw std::runtime_error(
-                    std::string("Failed to send RPC: ") +
-                    HG_Error_to_string(ret));
-        }
+        detail::forward<ExecutionContext, 
+                        MercuryInput<ID>, 
+                        MercuryOutput<ID>,
+                        RpcOutput<ID>>(
+                                ctx, 
+                                std::forward<MercuryInput<ID>>(hg_input));
 
         return HG_SUCCESS;
     }
 
+#if 0
     static hg_return_t
     forward_completion_callback(const struct hg_cb_info* cbi) {
 
@@ -392,6 +528,7 @@ struct rpc_processor<ID, message::simple> : public rpc_processor_base {
 
         return HG_SUCCESS;
     }
+#endif
 
     static hg_return_t
     process(hg_handle_t handle) {
@@ -447,62 +584,50 @@ struct rpc_processor<ID, message::simple> : public rpc_processor_base {
  * Specialization for sending RPCs that require a bulk transfer
  * */
 template <rpc ID>
-struct rpc_processor<ID, message::bulk> : public rpc_processor_base {
+struct rpc_processor<ID, message::bulk> {
 
-    using SelfTp = rpc_processor<ID, message::bulk>;
     using RpcInfoTp = rpc_descriptor<ID>;
     using OutputTp = typename RpcInfoTp::output_arg_type;
 
+    template <typename ExecutionContext>
     static hg_return_t
-    submit(origin_context<ID>* ctx) {
+    post(ExecutionContext* ctx) {
 
         DEBUG2("{}(ctx={})", __func__, fmt::ptr(ctx));
 
-        //XXX START
-        /// ctx->m_size = 512;
-        /// ctx->m_buffer = calloc(1, 512);
-        /// assert(ctx->m_buffer);
-
-        /// const char payload[] = "Hello world!\n";
-        /// memcpy(ctx->m_buffer, payload, sizeof(payload));
-        // XXX END
-
         //PRINT_HG_STATE(DEBUG2, ctx);
 
-        hg_return_t ret = create_hg_handle<ID>(ctx);
-
-        if(ret != HG_SUCCESS) {
-            throw std::runtime_error(
-                    std::string("Failed to create handle: ") +
-                    HG_Error_to_string(ret));
-        }
+        // create a Mercury handle for the RPC and save it in the RPC's 
+        // execution context
+        ctx->m_handle = detail::create_handle(ctx->m_hg_context,
+                                              ctx->hg_addr(),
+                                              ctx->hg_id());
 
         // convert the hermes RPC input to Mercury RPC input
         // (this relies on the explicit conversion constructor defined for 
         // the type)
-        auto hg_input = MercuryInput<ID>(ctx->m_input);
+        auto&& hg_input = MercuryInput<ID>(ctx->m_input);
 
-        // save the bulk_handle in the context so that we can free it later
+        // also save the Mercury bulk_handle in the execution context so that
+        // we can refer to it later
         ctx->m_bulk_handle = hg_input.bulk_handle;
 
         // send the RPC
-        ret = forward_hg_rpc<ID>(ctx, 
-                                 hg_input, 
-                                 SelfTp::forward_completion_callback);
-
-        if(ret != HG_SUCCESS) {
-            throw std::runtime_error(
-                    std::string("Failed to send RPC: ") +
-                    HG_Error_to_string(ret));
-        }
+        detail::forward<ExecutionContext, 
+                        MercuryInput<ID>, 
+                        MercuryOutput<ID>,
+                        RpcOutput<ID>>(
+                                ctx, 
+                                std::forward<MercuryInput<ID>>(hg_input));
 
         return HG_SUCCESS;
     }
 
+#if 0
     static hg_return_t
     forward_completion_callback(const struct hg_cb_info* cbi) {
 
-        using Context = detail::origin_context<ID>;
+        using Context = detail::execution_context<ID>;
 
         auto* ctx = static_cast<Context*>(cbi->arg);
 
@@ -541,6 +666,7 @@ struct rpc_processor<ID, message::bulk> : public rpc_processor_base {
 
         return HG_SUCCESS;
     }
+#endif
 
     static hg_return_t
     process(hg_handle_t handle) {
@@ -559,127 +685,29 @@ struct rpc_processor<ID, message::bulk> : public rpc_processor_base {
             std::static_pointer_cast<RpcInfoTp>(
                     detail::registered_rpcs_v2.at(ID));
 
-        ///XXX this is not initialized right now
         RpcInput<ID> rpc_input = RpcInput<ID>(hg_input);
 
         request req(handle, hg_input.bulk_handle);
 
-        RpcOutput<ID> output_val = 
-            rpc_desc->invoke_handler(event::on_arrival, req, rpc_input);
-
-        return HG_SUCCESS;
-
-#if 0
-        //XXX
-        auto* ctx = new detail::target_context<ID>(hg_input);
-        ctx->m_handle = handle;
-        ctx->m_size = 512;
-        ctx->m_buffer = calloc(1, 512);
-        assert(ctx->m_buffer);
-        //XXX
-
-        // create bulk handle
-        ret = HG_Bulk_create(
-                // TODO
-                hgi->hg_class,
-                // TODO
-                1,
-                // TODO
-                &ctx->m_buffer,
-                // TODO
-                &ctx->m_size,
-                // TODO
-                HG_BULK_WRITE_ONLY,
-                // TODO
-                &ctx->m_bulk_handle);
-
-        assert(ret == HG_SUCCESS);
-
-        // initiate bulk transfer from client to server
-        ret = HG_Bulk_transfer(
-                // TODO
-                hgi->context,
-                // TODO
-                bulk_transfer_completion_callback,
-                // TODO
-                ctx,
-                // TODO
-                HG_BULK_PULL,
-                // TODO
-                hgi->addr,
-                // TODO
-                hg_input.bulk_handle,
-                // TODO
-                0,
-                // TODO
-                ctx->m_bulk_handle,
-                // TODO
-                0,
-                // TODO
-                ctx->m_size,
-                // TODO
-                HG_OP_ID_IGNORE);
-
-        assert(ret == HG_SUCCESS);
-
-        return HG_SUCCESS;
-#endif
-    }
-
-    static hg_return_t
-    bulk_transfer_completion_callback(const struct hg_cb_info* cbi) {
-
-        auto* ctx = 
-            static_cast<target_context<ID>*>(cbi->arg);
-
-        assert(cbi->ret == HG_SUCCESS);
-
-        assert(detail::registered_rpcs_v2.count(ID));
-
-        DEBUG2("Looking up RPC descriptor for [{}]", 
-               rpc_names[static_cast<int>(ID)]);
-
-        auto rpc_desc = 
-            std::static_pointer_cast<RpcInfoTp>(
-                    detail::registered_rpcs_v2.at(ID));
-
-        ///XXX this is not initialized right now
-        MercuryInput<ID> hg_input = ctx->mercury_input();
-        RpcInput<ID> rpc_input = RpcInput<ID>(hg_input);
-
-        request req(ctx->m_handle);
-
-        RpcOutput<ID> output_val = 
-            rpc_desc->invoke_handler(event::on_completion, req, rpc_input);
-
-        hg_return_t ret = HG_Respond(
-                ctx->m_handle,
-                NULL,
-                NULL,
-                &output_val);
-        assert(ret == HG_SUCCESS);
-
-        HG_Bulk_free(ctx->m_bulk_handle);
-        HG_Destroy(ctx->m_handle);
-        // free(ctx->m_buffer);
-        delete ctx;
+        rpc_desc->invoke_user_handler(std::move(req), rpc_input);
 
         return HG_SUCCESS;
     }
-
 };
 
 
 
+#if 0
 // forward declaration of helper functions
 template <rpc ID>
 hg_return_t
 post_lookup_request(const char* address, 
-                    origin_context<ID>* ctx);
+                    execution_context<ID>* ctx);
 
 template <rpc ID>
 hg_return_t
 lookup_completion_callback(const struct hg_cb_info* cbi);
+#endif
 
 } // namespace detail
 
@@ -786,26 +814,47 @@ template <rpc ID>
 class rpc_handle {
 
     friend class async_engine;
-    using Context = detail::origin_context<ID>;
+
+    template <
+        typename ExecutionContext, 
+        typename MercuryInput, 
+        typename MercuryOutput,
+        typename RpcOutput>
+    friend void
+    detail::forward(ExecutionContext* ctx,
+                    MercuryInput&& input);
+
+    using Context = detail::execution_context<ID, rpc_handle<ID>>;
 
     rpc_handle(const hg_context_t * const hg_context,
                const std::vector<std::shared_ptr<detail::address>>& targets,
                const RpcInput<ID>& input) {
 
-        for(const auto& addr : targets) {
+        m_ctxs.reserve(targets.size());
+
+        for(auto&& addr : targets) {
             m_ctxs.emplace_back(
-                    std::make_shared<Context>(
-                        hg_context, addr, input));
+                    std::make_shared<Context>(this, hg_context, addr, input));
         }
     }
 
 public:
     // TODO status(), ret_value(), etc...
     
+    void
+    wait() const {
+    }
+
+    RpcOutput<ID>
+    get() const {
+        // TODO: return a result_set
+        return m_output;
+    }
 
 
 private:
     std::vector<std::shared_ptr<Context>> m_ctxs;
+    RpcOutput<ID> m_output;
 };
 
 class async_engine {
@@ -1054,7 +1103,7 @@ public:
 
     template <rpc ID, typename Callable>
     void
-    register_handler(event trigger, Callable&& handler) {
+    register_handler(Callable&& handler) {
 
         using RpcInfoTp = detail::rpc_descriptor<ID>;
 
@@ -1067,7 +1116,7 @@ public:
             std::static_pointer_cast<RpcInfoTp>(
                     detail::registered_rpcs_v2.at(ID));
 
-        rpc_desc->set_handler(trigger, std::forward<Callable>(handler)); 
+        rpc_desc->set_user_handler(std::forward<Callable>(handler)); 
     }
 
     /**
@@ -1095,40 +1144,17 @@ public:
     }
 
     /**
-     * Send an RPC.
+     * Construct an RPC.
      *
      * This is an asynchronous operation and it will return immediately.
      *
      * @param target_name [IN]  the target's name
      * @param target_port [IN]  the target's port
      */
-//    template <rpc ID>
-//    rpc_handle<ID>
-//    make_rpc(const endpoint_set& targets,
-//             const RpcInputArgTp<ID>& input_arg) {
-//
-//        const auto p = detail::rpc_descriptor<ID>();
-//
-//        DEBUG2("  Creating public RPC handle");
-//
-//        std::vector<std::shared_ptr<detail::address>> addresses;
-//        std::transform(targets.begin(), targets.end(),
-//                       std::back_inserter(addresses),
-//                       [](const endpoint& endp) {
-//                           return endp.address();
-//                       });
-//
-//        return rpc_handle<ID>(m_hg_context,
-//                                   addresses,
-//                                   input_arg);
-//    }
-
     template <rpc ID>
     rpc_handle<ID>
     make_rpc(const endpoint_set& targets,
              const RpcInput<ID>& input) {
-
-        const auto p = detail::rpc_descriptor<ID>();
 
         DEBUG2("  Creating public RPC handle");
 
@@ -1139,66 +1165,36 @@ public:
                            return endp.address();
                        });
 
-        return rpc_handle<ID>(m_hg_context, addrs, input);
+        return {m_hg_context, addrs, input};
     }
 
-#if 0
     template <rpc ID, typename... Args>
     rpc_handle<ID>
-    make_rpc(const endpoint_set& targets,
-             const RpcInputArgTp<ID>& input_arg,
-             Args&&... args) {
+    post(const endpoint_set& targets,
+         Args&&... args) {
 
-        const auto p = detail::rpc_descriptor<ID>();
+        DEBUG2("  Posting RPC");
 
-        DEBUG2("  Creating public RPC handle");
-
-        std::vector<std::shared_ptr<detail::address>> addresses;
+        std::vector<std::shared_ptr<detail::address>> addrs;
         std::transform(targets.begin(), targets.end(),
-                       std::back_inserter(addresses),
+                       std::back_inserter(addrs),
                        [](const endpoint& endp) {
                            return endp.address();
                        });
 
-
-        hermes::send_buffer_args test = input_arg;
-
-        //test_in_t foo_args = std::make_tuple(std::forward<Args>(args)...);
-
-        //send_buffer_in_t foo{std::forward<Args>(args)..., 0, 0};
-
-        //convert(std::forward<Args>(args)...);
-
-        //mutable_buffer buf;
-        //detail::bulk b1(m_hg_class, detail::bulk_type::read_only, buf);
-
-        //std::vector<mutable_buffer> bseq {
-        //    {reinterpret_cast<void*>(0xdeadbeef), 42},
-        //};
-
-        //detail::bulk b1(m_hg_class, detail::bulk_type::read_only, bseq);
-
-        //hg_bulk_t foo(bseq);
-
-
-        return rpc_handle<ID>(m_hg_context,
-                                   addresses,
-                                   input_arg);
-    }
-#endif
-
-    template <rpc ID>
-    void
-    submit(const rpc_handle<ID>& handle) {
+        auto handle = 
+            rpc_handle<ID>(m_hg_context, 
+                           addrs, 
+                           RpcInput<ID>(std::forward<Args>(args)...));
 
         std::size_t i = 0;
 
         for(const auto& ctx : handle.m_ctxs) {
 
-            using MSG_TYPE = typename detail::rpc_descriptor<ID>::message_type;
+            using MESSAGE = typename detail::rpc_descriptor<ID>::message_type;
 
             hg_return ret = 
-                detail::rpc_processor<ID, MSG_TYPE>::submit(ctx.get());
+                detail::rpc_processor<ID, MESSAGE>::post(ctx.get());
 
             // if this submission fails, cancel all previously posted RPCs
             if(ret != HG_SUCCESS) {
@@ -1206,7 +1202,37 @@ public:
                     (void) HG_Cancel(handle.m_ctxs[i]->m_handle);
                 }
 
-                throw std::runtime_error("Failed to submit RPC");
+                throw std::runtime_error("Failed to post RPC: " + 
+                        std::string(HG_Error_to_string(ret)));
+            }
+            
+            ++i;
+        }
+
+        return handle;
+    }
+
+
+    template <rpc ID>
+    void
+    post(const rpc_handle<ID>& handle) {
+
+        std::size_t i = 0;
+
+        for(const auto& ctx : handle.m_ctxs) {
+
+            using MESSAGE = typename detail::rpc_descriptor<ID>::message_type;
+
+            hg_return ret = 
+                detail::rpc_processor<ID, MESSAGE>::post(ctx.get());
+
+            // if this submission fails, cancel all previously posted RPCs
+            if(ret != HG_SUCCESS) {
+                for(std::size_t j = 0; j < i; ++j) {
+                    (void) HG_Cancel(handle.m_ctxs[i]->m_handle);
+                }
+
+                throw std::runtime_error("Failed to post RPC");
             }
             
             i++;
@@ -1214,121 +1240,85 @@ public:
     }
 
     template <typename Callable>
-    void pull(const request& req,
-              const exposed_memory& src, 
-              const exposed_memory& dst, 
-              Callable&& user_callback) {
+    void async_pull(request&& req,
+                    const exposed_memory& dst, 
+                    Callable&& user_callback) {
 
-        (void) src;
-        (void) dst;
-
-        assert(src.count() == dst.count());
-
-        void** ptrs = reinterpret_cast<void**>(
+        void** buf_ptrs = reinterpret_cast<void**>(
                 ::alloca(dst.m_buffers.size() * sizeof(void*)));
-        hg_size_t* sizes = reinterpret_cast<hg_size_t*>(
+        hg_size_t* buf_sizes = reinterpret_cast<hg_size_t*>(
                 ::alloca(dst.m_buffers.size() * sizeof(hg_size_t)));
 
         std::size_t i = 0;
         for(auto&& buf : dst.m_buffers) {
-            ptrs[i] = buf.data();
-            sizes[i] = buf.size();
+            buf_ptrs[i] = buf.data();
+            buf_sizes[i] = buf.size();
             ++i;
         }
 
-        hg_bulk_t bulk_handle;
-
-        // create bulk handle
-        hg_return_t ret = HG_Bulk_create(
-                    // pointer to Mercury class
+        // create a local bulk handle for the transfer of buffers
+        req.m_local_bulk_handle = detail::create_bulk_handle(
                     const_cast<hg_class_t*>(dst.m_hg_class),
-                    // number of segments
-                    i,
-                    // array of pointers to segments 
-                    ptrs,
-                    // array of segment sizes
-                    sizes,
-                    // permission flag
-                    HG_BULK_WRITE_ONLY,
-                    // pointer to returned bulk handle
-                    &bulk_handle);
+                    i, buf_ptrs, buf_sizes, HG_BULK_WRITE_ONLY);
 
-        if(ret != HG_SUCCESS) {
-            throw std::runtime_error("Failed to create bulk handle");
-        }
+        assert(req.m_local_bulk_handle != HG_BULK_NULL);
 
-        DEBUG2("HG_Bulk_create(hg_class={}, count={}, buf_ptrs={}, buf_sizes={}, "
-            "flags={}, handle={}) = {}", fmt::ptr(dst.m_hg_class),
-            i, fmt::ptr(ptrs), fmt::ptr(sizes), "HG_BULK_WRITE_ONLY",
-            fmt::ptr(&bulk_handle), ret);
-
+        // We need to allow custom user callbacks, but the Mercury API 
+        // restricts us in the prototypes that we can use. Since we don't
+        // want users to bother with Mercury internals, // we register our own
+        // completion_callback() lambda and we dynamically allocate
+        // a transfer_context with all the required information that we
+        // propagate through Mercury using the arg field in HG_Bulk_transfer().
+        // Once our callback is invoked, we can unpack the information, delete
+        // the transfer_context and invoke the actual user callback
         struct transfer_context {
-            transfer_context(const request& req, Callable&& user_callback) :
-                m_request(req),
-                m_user_callback(user_callback) { }
+            transfer_context(request&& req, Callable&& user_callback) :
+                m_request(std::move(req)),
+                m_user_callback(std::move(user_callback)) { }
 
-            request m_request;
-            Callable m_user_callback;
+            request&& m_request;
+            Callable&& m_user_callback;
         };
 
-        const auto ctx = 
-            new transfer_context(req, std::forward<Callable>(user_callback));
+        const auto ctx =
+            new transfer_context(std::move(req), 
+                                 std::forward<Callable>(user_callback));
 
         const auto completion_callback =
                 [](const struct hg_cb_info* cbi) -> hg_return_t {
 
-                    const auto* ctx = 
-                        reinterpret_cast<transfer_context*>(cbi->arg);
-                    ctx->m_user_callback(ctx->m_request);
+                    if(cbi->ret != HG_SUCCESS) {
+                        DEBUG("Bulk transfer failed");
+                        return cbi->ret;
+                    }
 
-                    delete ctx;
+                    // make sure that ctx is freed regardless of what might 
+                    // happen in m_user_callback()
+                    const auto ctx = 
+                        std::unique_ptr<transfer_context>(
+                                reinterpret_cast<transfer_context*>(cbi->arg));
+
+                    ctx->m_user_callback(std::move(ctx->m_request));
 
                     return HG_SUCCESS;
                 };
 
-        const struct hg_info* hgi = HG_Get_info(req.m_handle);
+        detail::bulk_transfer(std::move(req), ctx, completion_callback);
+    }
 
-        if(hgi == NULL) {
-            throw std::runtime_error("Failed to retrieve request information "
-                                    "from internal handle");
-        }
+    template <rpc ID, typename Output>
+    void
+    respond(request&& req, 
+            Output&& out) {
 
-        // initiate bulk transfer from client to server
-        ret = HG_Bulk_transfer(
-                // pointer to Mercury context
-                hgi->context,
-                // pointer to function callback
-                completion_callback,
-                // pointer to data passed to callback
-                reinterpret_cast<void*>(ctx),
-                // transfer operation: pull from client
-                HG_BULK_PULL,
-                // address of origin
-                hgi->addr,
-                // bulk handle from origin
-                req.m_bulk_handle,
-                // origin offset
-                0,
-                // local bulk handle
-                bulk_handle,
-                // local offset
-                0,
-                // size of data to be transferred
-                src.size(),
-                // pointer to returned operation ID
-                HG_OP_ID_IGNORE);
+        detail::respond(std::move(req), MercuryOutput<ID>(out));
 
-        if(ret != HG_SUCCESS) {
-            throw std::runtime_error("Failed to pull remote data");
-        }
+        //XXX required? if so, move to ~request()
+        //HG_Bulk_free(ctx->m_bulk_handle);
 
-        DEBUG2("HG_Bulk_transfer(hg_context={}, callback={}, arg={}, op={}, "
-            "addr={}, origin_handle={}, origin_offset={}, local_handle={}, "
-            "local_offset={}, size={}, HG_OP_ID_IGNORE) = {}", 
-            fmt::ptr(hgi->context),
-            "<cannot print>", fmt::ptr(ctx), "HG_BULK_PULL", 
-            fmt::ptr(hgi->addr), fmt::ptr(&req.m_bulk_handle), 0, 
-            fmt::ptr(&bulk_handle), 0, src.size(), ret);
+        // since req is no longer forwarded to any callback, req goes out of 
+        // scope here and the Mercury handle is freed by the 
+        // ~request() destructor
     }
 
 private:
@@ -1438,10 +1428,11 @@ private:
 
 namespace detail {
 
+#if 0
 template <rpc ID>
 hg_return_t
 post_lookup_request(const char* address, 
-                    origin_context<ID>* ctx) {
+                    execution_context<ID>* ctx) {
 
     DEBUG2("post_lookup_request(address={}, ctx={})",
            address, fmt::ptr(ctx));
@@ -1469,7 +1460,7 @@ template <rpc ID>
 hg_return_t
 lookup_completion_callback(const struct hg_cb_info* cbi) {
 
-    auto* ctx = static_cast<origin_context<ID>*>(cbi->arg);
+    auto* ctx = static_cast<execution_context<ID>*>(cbi->arg);
 
     DEBUG("Processing lookup request [ctx: {}]",
             static_cast<void*>(ctx));
@@ -1490,6 +1481,7 @@ lookup_completion_callback(const struct hg_cb_info* cbi) {
 //    DEBUG("Lookup request succeeded");
     return HG_SUCCESS;
 }
+#endif
 
 template <rpc ID, typename InputTp>
 inline hg_return_t

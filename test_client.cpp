@@ -89,13 +89,14 @@ main(int argc, char* argv[]) {
         //     {buf.data(), buf.size()}
         // };
 
-        char data[] = {"This is a user buffer\0"};
+        char data[] = {"These are the contents of a user buffer\0"};
 
         std::vector<hermes::mutable_buffer> bufvec{
             hermes::mutable_buffer{data, sizeof(data)}
         };
 
-        auto exposed_buffers = hg.expose(bufvec, hermes::access_mode::read_only);
+        auto exposed_buffers = 
+            hg.expose(bufvec, hermes::access_mode::read_only);
 
         hermes::send_buffer_args in3b("test", exposed_buffers);
         //in3.buffer_address = reinterpret_cast<hg_uint64_t>(buf.data());
@@ -103,23 +104,39 @@ main(int argc, char* argv[]) {
 
         // create RPCs
         auto h1 = 
-            hg.make_rpc<hermes::rpc::send_message>(endps, in1);
+            hg.make_rpc<hermes::rpc::send_message>(endps, in1); //TODO: remove endps from here
 
         // auto h2 = 
         //     hg.make_rpc<hermes::rpc::send_file>(endps, in2, 0xdeadbeef);
 
 
-        auto h3 = 
-            hg.make_rpc<hermes::rpc::send_buffer>(endps, in3b);
+//        auto h3 = 
+//            hg.make_rpc<hermes::rpc::send_buffer>(endps, in3b);
 
-        // submit RPCs
-        hg.submit(h1);
+        // submit RPCs (this function returns immediately)
+//        hg.post(h1);
         //hg.submit(h2);
-        hg.submit(h3);
+        //hg.post(h3/*, endps*/); // alternatively: h3.post(endps);
 
 
-//
+        INFO("Sending [send_buffer] RPC");
+
+        auto rpc3 = 
+            hg.post<hermes::rpc::send_buffer>(endps, "test", exposed_buffers);
+
+
+// TODO: we need a wait_for_completion() on a handle sequence (check how ç
+// std::futures do it)
         sleep(5);
+
+//        rpc3.wait();
+
+        hermes::send_buffer_retval rv = rpc3.get();
+
+        INFO("[send_buffer] response: {}", rv.retval());
+
+//        h1.status();
+//        result_set<hermes::rpc::send_buffer> out3 = h1.output();
 
     } 
     catch(const std::exception& ex) {

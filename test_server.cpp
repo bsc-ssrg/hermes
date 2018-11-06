@@ -4,9 +4,12 @@
 #include "hermes.hpp"
 #include "logging.hpp"
 
-hermes::send_file_retval
-send_file_handler(const hermes::request& req, 
+void
+send_file_handler(hermes::request&& req, 
                   const hermes::send_file_args& args) {
+
+    (void) req;
+    (void) args;
 
     INFO("RPC [send_file] received");
 
@@ -15,17 +18,17 @@ send_file_handler(const hermes::request& req,
 
     INFO("Callback invoked: {}(\"{}\") = {}!", 
          __FUNCTION__, args.get_pathname(), "?");
-
-    return {};
 }
 
 struct example_class {
 
     const int m_retval = 36;
 
-    hermes::send_message_retval
+    void
     send_message_handler(const hermes::request& req, 
                          const hermes::send_message_args& args) {
+
+        (void) req;
 
         INFO("RPC [send_message] received");
 
@@ -34,8 +37,6 @@ struct example_class {
 
         INFO("Member callback invoked: {}(\"{}\") = {}!", 
              __FUNCTION__, args.get_message(), "?");
-
-        return {};
     }
 };
 
@@ -43,16 +44,16 @@ int
 main(int argc, char* argv[]) {
 
     using hermes::async_engine;
-    using hermes::event;
 
     (void) argc;
     (void) argv;
 
     try {
+        // TODO: rename transport_type to transport
         hermes::async_engine hg(hermes::transport_type::bmi_tcp, true);
 
         const auto send_buffer_handler = 
-            [&](const hermes::request& req,
+            [&](hermes::request&& req,
                 const hermes::send_buffer_args& args) {
 
                 // hermes::send_buffer_retval out;
@@ -78,6 +79,8 @@ main(int argc, char* argv[]) {
                     bufvec.emplace_back(data, remote_size);
                 }
 
+                // TODO: remove the need to expose local buffers and just pass
+                // the bufvec directly to async_pull
                 auto local_buffers = 
                     hg.expose(bufvec, hermes::access_mode::write_only);
 
@@ -88,7 +91,7 @@ main(int argc, char* argv[]) {
                 // was actually copied into the buffers, but it's not necessary
                 // in real code)
                 const auto do_pull_completion = 
-                    [&bufvec](const hermes::request& req) {
+                    [&bufvec, &hg](hermes::request&& req) {
 
                     INFO("Pull successful!");
 
@@ -98,31 +101,24 @@ main(int argc, char* argv[]) {
                                 reinterpret_cast<char*>(local_buf.data()));
                     }
 
-                    // if(req.requires_response()) {
-                    //     hg.respond(req, ...);
-                    // }
+                    if(req.requires_response()) {
+                        hermes::send_buffer_retval rv(42);
+                        hg.respond<hermes::rpc::send_buffer>(std::move(req), rv);
+                    }
                 };
 
-                hg.pull(req, 
-                        remote_buffers, 
-                        local_buffers, 
-                        do_pull_completion);
-
-                return hermes::send_buffer_retval{};
+                hg.async_pull(std::move(req), 
+                              local_buffers, 
+                              do_pull_completion);
             };
 
-        hg.register_handler<hermes::rpc::send_buffer>(
-                event::on_arrival,
-                send_buffer_handler);
+        hg.register_handler<hermes::rpc::send_buffer>(send_buffer_handler);
 
-        hg.register_handler<hermes::rpc::send_file>(
-                event::on_arrival,
-                send_file_handler);
+        hg.register_handler<hermes::rpc::send_file>(send_file_handler);
 
         example_class ex;
 
         hg.register_handler<hermes::rpc::send_message>(
-                event::on_arrival,
                 std::bind(&example_class::send_message_handler, 
                           ex, std::placeholders::_1, std::placeholders::_2));
 
