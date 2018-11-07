@@ -104,14 +104,14 @@ MERCURY_GEN_PROC(send_buffer_out_t,
 
 namespace detail { 
 template <rpc ID> struct origin_context; 
-template <rpc ID, typename MessageTp> struct rpc_processor; 
+template <rpc ID, typename MessageTp> struct executor; 
 }
 
 
 class send_message_args {
 
     friend class detail::origin_context<rpc::send_message>;
-    friend class detail::rpc_processor<rpc::send_message, message::simple>;
+    friend class detail::executor<rpc::send_message, message::simple>;
 
 public:
     send_message_args(const std::string& message) :
@@ -133,13 +133,50 @@ private:
     std::string m_message;
 };
 
-class send_message_retval { };
+class send_message_retval { 
+
+    friend class async_engine;
+
+    template <
+        typename ExecutionContext, 
+        typename MercuryInput, 
+        typename MercuryOutput,
+        typename RpcOutput>
+    friend void
+    detail::forward(ExecutionContext* ctx,
+                    MercuryInput&& input);
+
+public:
+    send_message_retval(int32_t retval) :
+        m_retval(retval) { }
+
+    int32_t
+    retval() const {
+        return m_retval;
+    }
+
+    void
+    set_retval(int32_t retval) {
+        m_retval = retval;
+    }
+
+private:
+    explicit send_message_retval(const send_message_out_t& out) {
+        m_retval = out.retval;
+    }
+
+    explicit operator send_message_out_t() {
+        return {m_retval};
+    }
+
+    int32_t m_retval;
+};
 
 
 class send_file_args {
 
     friend class detail::origin_context<rpc::send_file>;
-    friend class detail::rpc_processor<rpc::send_file, message::bulk>;
+    friend class detail::executor<rpc::send_file, message::bulk>;
 
 public:
     send_file_args(const std::string& pathname,
@@ -176,7 +213,7 @@ class send_file_retval { };
 class send_buffer_args {
 
     friend class detail::origin_context<rpc::send_buffer>;
-    friend class detail::rpc_processor<rpc::send_buffer, message::bulk>;
+    friend class detail::executor<rpc::send_buffer, message::bulk>;
 
 public:
     send_buffer_args(const std::string& pathname,
@@ -221,7 +258,6 @@ class send_buffer_retval {
                     MercuryInput&& input);
 
 public:
-    send_buffer_retval() { }
     send_buffer_retval(int32_t retval) :
         m_retval(retval) { }
 
@@ -294,7 +330,7 @@ template <rpc>
 struct rpc_descriptor : public rpc_descriptor_base {};
 
 template <rpc ID, typename MsgTp>
-struct rpc_processor;
+struct executor;
 
 /******************************************************************************/
 /** specialized rpc_info for rpc::message */
@@ -310,7 +346,7 @@ struct rpc_descriptor<rpc::send_message> : public rpc_descriptor_base {
     using input_arg_type = send_message_in_t;
     using output_arg_type = send_message_out_t;
     using message_type = message::simple;
-    using processor = rpc_processor<rpc::send_message, message_type>;
+    using executor = detail::executor<rpc::send_message, message_type>;
     using requires_reply = std::true_type;
 
     rpc_descriptor() :
@@ -361,7 +397,7 @@ struct rpc_descriptor<rpc::send_file> : public rpc_descriptor_base {
     using input_arg_type = send_file_in_t;
     using output_arg_type = send_file_out_t;
     using message_type = message::bulk;
-    using processor = rpc_processor<rpc::send_file, message_type>;
+    using executor = detail::executor<rpc::send_file, message_type>;
     using requires_reply = std::true_type;
 
     rpc_descriptor() :
@@ -412,7 +448,7 @@ struct rpc_descriptor<rpc::send_buffer> : public rpc_descriptor_base {
     using input_arg_type = send_buffer_in_t;
     using output_arg_type = send_buffer_out_t;
     using message_type = message::bulk;
-    using processor = rpc_processor<rpc::send_buffer, message_type>;
+    using executor = detail::executor<rpc::send_buffer, message_type>;
     using requires_reply = std::true_type;
 
     rpc_descriptor() :
@@ -449,6 +485,7 @@ struct rpc_descriptor<rpc::send_buffer> : public rpc_descriptor_base {
 };
 
 
+#if 0 // disabled because we don't support void input types yet
 /******************************************************************************/
 /** specialized rpc_info for rpc::send_buffer */
 template <>
@@ -463,8 +500,7 @@ struct rpc_descriptor<rpc::shutdown> : public rpc_descriptor_base {
 //    using input_arg_type = send_buffer_in_t;
 //    using output_arg_type = send_buffer_out_t;
     using message_type = message::simple;
-    using processor = rpc_processor<rpc::shutdown, message_type>;
-    using requires_reply = std::true_type;
+    using executor = detail::executor<rpc::shutdown, message_type>;
 
     rpc_descriptor() :
         rpc_descriptor_base(
@@ -498,6 +534,7 @@ struct rpc_descriptor<rpc::shutdown> : public rpc_descriptor_base {
         std::function<void(request&&)>;
     handler_type m_user_handler;
 };
+#endif
 
 
 

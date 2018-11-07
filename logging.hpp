@@ -24,18 +24,34 @@ set_debug_output_level(unsigned int level) {
         fmt::print(stdout, "WARNING: {}\n", fmt::format(__VA_ARGS__)); \
     } while(0);
 
+#ifdef HERMES_DEBUG
+
 #define DEBUG(...) \
-    do { \
-        fmt::print(stdout, "[{}:{: >35}()] {} {}\n", __FILE__,  __func__, \
-                   "DEBUG:", fmt::format(__VA_ARGS__)); \
-    } while(0);
+    DEBUG_HELPER(1u, __VA_ARGS__);
 
 #define DEBUG2(...) \
-    do { \
-        if(logging::debug_output_level >= 2) { \
-            DEBUG(__VA_ARGS__); \
-        } \
+    DEBUG_HELPER(2u, __VA_ARGS__);
+
+
+#define DEBUG_HELPER(level, ...)                                            \
+    do {                                                                    \
+        __typeof(level) l = (level);                                        \
+        if(logging::debug_output_level >= l) {                              \
+            fmt::print(stdout, "[{}:{}()] {} {}\n", __FILE__,  __func__,    \
+                       "DEBUG:", fmt::format(__VA_ARGS__));                 \
+        }                                                                   \
     } while(0);
+
+#else
+
+#define DEBUG(...)  \
+    do {            \
+    } while(0); 
+
+#define DEBUG2(...)     \
+    DEBUG(__VA_ARGS__)
+
+#endif
 
     
 #define ERROR(...) \

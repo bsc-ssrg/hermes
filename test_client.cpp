@@ -62,82 +62,92 @@ main(int argc, char* argv[]) {
     (void) argc;
     (void) argv;
 
+    using hermes::transport;
+    using hermes::async_engine;
+    using hermes::endpoint_set;
+    using hermes::result_set;
+    using hermes::rpc;
+    using hermes::access_mode;
+    using hermes::send_buffer_args;
+
     try {
 
-        hermes::async_engine hg(hermes::transport_type::bmi_tcp);
+        // initialize the engine with appropriate transport protocol
+        async_engine hg(transport::bmi_tcp);
 
-        hermes::endpoint_set endps = hg.lookup({
+        endpoint_set endps = hg.lookup({
             {"localhost", 22222},
         });
 
-        mapped_buffer buf("rpcs.hpp");
+//        mapped_buffer buf("rpcs.hpp");
 
+        // start the asynchronous engine
         hg.run();
 
-        // prepare input data for RPCs
-        // hermes::send_message_in_t in1;
-        // in1.message = "Hello world!";
+        /*********************************************************************** 
+         * Example 1: posting an RPC with arbitrary arguments and 
+         * an expected response
+         **********************************************************************/
+        const std::string message("Hello world!!!");
 
-        hermes::send_message_args in1("Hello world!!!");
+        INFO("Sending RPC [send_message, args: \"{}\"]", message);
 
-        // hermes::send_file_in_t in2;
-        // in2.pathname = "./foobar";
+        auto rpc1 = 
+            hg.post<rpc::send_message>(endps, message);
 
-        // hermes::send_buffer_in_t in3;
+        // wait for results
+        result_set<rpc::send_message> results = rpc1.get();
 
-        // std::vector<hermes::mutable_buffer> bufvec{
-        //     {buf.data(), buf.size()}
-        // };
+        INFO("All results received [size: {}]", results.size());
 
+        for(auto&& rv : results) {
+            INFO("retval: {}", rv.retval());
+        }
+
+        /*********************************************************************** 
+         * Example 2: posting an RPC with arbitrary arguments plus an 
+         * additional transfer of associated buffers 
+         **********************************************************************/
         char data[] = {"These are the contents of a user buffer\0"};
 
-        std::vector<hermes::mutable_buffer> bufvec{
+        std::vector<hermes::mutable_buffer> bufvec {
             hermes::mutable_buffer{data, sizeof(data)}
         };
 
         auto exposed_buffers = 
-            hg.expose(bufvec, hermes::access_mode::read_only);
-
-        hermes::send_buffer_args in3b("test", exposed_buffers);
-        //in3.buffer_address = reinterpret_cast<hg_uint64_t>(buf.data());
-        //in3.buffer_size = reinterpret_cast<hg_uint64_t>(buf.size());
-
-        // create RPCs
-        auto h1 = 
-            hg.make_rpc<hermes::rpc::send_message>(endps, in1); //TODO: remove endps from here
-
-        // auto h2 = 
-        //     hg.make_rpc<hermes::rpc::send_file>(endps, in2, 0xdeadbeef);
-
-
-//        auto h3 = 
-//            hg.make_rpc<hermes::rpc::send_buffer>(endps, in3b);
-
-        // submit RPCs (this function returns immediately)
-//        hg.post(h1);
-        //hg.submit(h2);
-        //hg.post(h3/*, endps*/); // alternatively: h3.post(endps);
-
+            hg.expose(bufvec, access_mode::read_only);
 
         INFO("Sending [send_buffer] RPC");
 
-        auto rpc3 = 
-            hg.post<hermes::rpc::send_buffer>(endps, "test", exposed_buffers);
+        // Option 1: 
+        //   Instantiate an [RPC]_args object containing the arguments and
+        //   pass it to the post() function
+        hermes::send_buffer_args in3a("test3a", exposed_buffers);
+        auto rpc2a = 
+            hg.post<rpc::send_buffer>(endps, in3a);
 
+        // Option 2: 
+        //   Instantiate an [RPC]_args object containing the arguments 
+        //   directly as a temporary in the post() function
+        auto rpc2b = 
+            hg.post<rpc::send_buffer>(endps, 
+                    send_buffer_args("test3b", exposed_buffers));
 
-// TODO: we need a wait_for_completion() on a handle sequence (check how ç
-// std::futures do it)
-        sleep(5);
+        // Option 3: 
+        //   Pass the RPC arguments directly to the post() function
+        auto rpc2c = 
+            hg.post<rpc::send_buffer>(endps, "test3c", exposed_buffers);
 
-//        rpc3.wait();
+        // wait for results
+        result_set<rpc::send_buffer> results2a = rpc2a.get();
+        result_set<rpc::send_buffer> results2b = rpc2b.get();
+        result_set<rpc::send_buffer> results2c = rpc2c.get();
 
-        hermes::send_buffer_retval rv = rpc3.get();
+        INFO("result_set size {}:", results2a.size());
 
-        INFO("[send_buffer] response: {}", rv.retval());
-
-//        h1.status();
-//        result_set<hermes::rpc::send_buffer> out3 = h1.output();
-
+        for(auto&& rv : results2a) {
+            INFO("{}", rv.retval());
+        }
     } 
     catch(const std::exception& ex) {
         throw;

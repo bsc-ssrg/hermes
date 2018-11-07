@@ -11,6 +11,7 @@
 #include <set>
 #include <vector>
 #include <utility>
+#include <future>
 
 // C includes
 #include <mercury.h>
@@ -135,7 +136,11 @@ forward(ExecutionContext* ctx,
         auto* ctx = reinterpret_cast<ExecutionContext*>(cbi->arg);
 
         // TODO: check if this needs to be done in a critical region
-        ctx->m_parent->m_output = RpcOutput(output_val);
+//        ctx->m_parent->m_outputs[0] = RpcOutput(output_val);
+
+        DEBUG2("Setting promise");
+
+        ctx->m_output_promise.set_value(RpcOutput(output_val));
 
         // clean up resources consumed by this RPC
 
@@ -145,10 +150,6 @@ forward(ExecutionContext* ctx,
     //    const struct hg_info* hgi = HG_Get_info(ctx->m_handle);
 
     //    HG_Addr_free(hgi->hg_class, hgi->addr);
-
-
-    //        free(ctx->m_buffer);
-    //    delete ctx;
 
         return HG_SUCCESS;
     };
@@ -255,8 +256,6 @@ respond(request&& req, Output&& out) {
                             // output struct
                             &out);
 
-    DEBUG2("***************** {}", out.retval);
-
     DEBUG2("HG_Respond(hg_handle={}, callback={}, arg={}, out_struct={}) = {}", 
            fmt::ptr(req.m_handle), "NULL", "NULL", fmt::ptr(&out), ret);
 
@@ -269,30 +268,30 @@ respond(request&& req, Output&& out) {
 } // namespace detail
 
 /** Valid transport types (i.e. transport types supported by Mercury) */
-enum class transport_type {
+enum class transport {
     bmi_tcp = 0, mpi_dynamic, mpi_static, na_sm, cci_tcp, cci_verbs, cci_gni,
     cci_sm, ofi_tcp, ofi_psm2, ofi_verbs, ofi_gni
 };
 
-/** Map to translate from transport_type to Mercury's transport string */
+/** Map to translate from transport to Mercury's transport string */
 static const
 std::unordered_map<
-    transport_type,
+    transport,
     const char* const,
     enum_class_hash
 > known_transports = {
-    { transport_type::bmi_tcp,     "bmi+tcp://"     },
-    { transport_type::mpi_dynamic, "mpi+dynamic://" },
-    { transport_type::mpi_static,  "mpi+static://"  },
-    { transport_type::na_sm,       "na+sm://"       },
-    { transport_type::cci_tcp,     "cci+tcp://"     },
-    { transport_type::cci_verbs,   "cci+verbs://"   },
-    { transport_type::cci_gni,     "cci+gni://"     },
-    { transport_type::cci_sm,      "cci+sm://"      },
-    { transport_type::ofi_tcp,     "ofi+tcp://"     },
-    { transport_type::ofi_psm2,    "ofi+psm2://"    },
-    { transport_type::ofi_verbs,   "ofi+verbs://"   },
-    { transport_type::ofi_gni,     "ofi+gni://"     }
+    { transport::bmi_tcp,     "bmi+tcp://"     },
+    { transport::mpi_dynamic, "mpi+dynamic://" },
+    { transport::mpi_static,  "mpi+static://"  },
+    { transport::na_sm,       "na+sm://"       },
+    { transport::cci_tcp,     "cci+tcp://"     },
+    { transport::cci_verbs,   "cci+verbs://"   },
+    { transport::cci_gni,     "cci+gni://"     },
+    { transport::cci_sm,      "cci+sm://"      },
+    { transport::ofi_tcp,     "ofi+tcp://"     },
+    { transport::ofi_psm2,    "ofi+psm2://"    },
+    { transport::ofi_verbs,   "ofi+verbs://"   },
+    { transport::ofi_gni,     "ofi+gni://"     }
 };
 
 #define PRINT_HG_STATE(om, st) \
@@ -351,12 +350,11 @@ struct execution_context {
         m_parent(parent),
         m_hg_context(hg_context),
         m_address(address),
-        //XXX move rpc_descriptor to detail
         m_rpc_descriptor(detail::rpc_descriptor<ID>()),
         m_input(input),
 //        m_hg_input(m_input),
-    m_handle(NULL),
-    m_bulk_handle(NULL)
+    m_handle(HG_HANDLE_NULL),
+    m_bulk_handle(HG_BULK_NULL)
 
 
     {
@@ -367,7 +365,9 @@ struct execution_context {
         //PRINT_HG_STATE(DEBUG2, this);
     }
 
-    ~execution_context() { }
+    ~execution_context() { 
+        DEBUG2("~execution_context()");
+    }
 
     const hg_context_t*
     hg_context() const {
@@ -411,6 +411,8 @@ struct execution_context {
     const rpc_descriptor<ID> m_rpc_descriptor;
     RpcInput<ID> m_input;
 
+    std::promise<RpcOutput<ID>> m_output_promise;
+
     //MercuryInput<ID> m_hg_input;
 
 //    RpcOutputArgTp<ID> m_output_vals;
@@ -451,16 +453,15 @@ struct target_context {
 #endif
 
 template <rpc ID, typename Message>
-struct rpc_processor {};
+struct executor {};
 
 /** 
  * Specialization for sending RPCs that do not require a bulk transfer
  * */
 template <rpc ID>
-struct rpc_processor<ID, message::simple> {
+struct executor<ID, message::simple> {
 
     using RpcInfoTp = rpc_descriptor<ID>;
-    using OutputTp = typename RpcInfoTp::output_arg_type;
 
     template <typename ExecutionContext>
     static hg_return_t
@@ -477,7 +478,7 @@ struct rpc_processor<ID, message::simple> {
         // convert the hermes RPC input to Mercury RPC input
         // (this relies on the explicit conversion constructor defined for 
         // the type)
-        auto hg_input = MercuryInput<ID>(ctx->m_input);
+        auto&& hg_input = MercuryInput<ID>(ctx->m_input);
 
         // send the RPC
         detail::forward<ExecutionContext, 
@@ -489,46 +490,6 @@ struct rpc_processor<ID, message::simple> {
 
         return HG_SUCCESS;
     }
-
-#if 0
-    static hg_return_t
-    forward_completion_callback(const struct hg_cb_info* cbi) {
-
-        if(cbi->ret != HG_SUCCESS) {
-            DEBUG("Forward request failed");
-            return cbi->ret;
-        }
-
-        // decode response
-        MercuryOutput<ID> output_val;
-        hg_return_t ret = HG_Get_output(cbi->info.forward.handle, &output_val);
-
-        if(ret != HG_SUCCESS) {
-            throw std::runtime_error(
-                    std::string("Failed to decode RPC response: ") +
-                                HG_Error_to_string(ret));
-        }
-
-        // TODO: actually process response (e.g. check out.ret)
-        // TODO: actually process response (e.g. check out.ret)
-        // TODO: actually process response (e.g. check out.ret)
-
-        // clean up resources consumed by this RPC
-
-        HG_Free_output(cbi->info.forward.handle, &output_val);
-        HG_Destroy(cbi->info.forward.handle);
-
-    //    const struct hg_info* hgi = HG_Get_info(ctx->m_handle);
-
-    //    HG_Addr_free(hgi->hg_class, hgi->addr);
-
-
-    //        free(ctx->m_buffer);
-    //    delete ctx;
-
-        return HG_SUCCESS;
-    }
-#endif
 
     static hg_return_t
     process(hg_handle_t handle) {
@@ -543,51 +504,32 @@ struct rpc_processor<ID, message::simple> {
         const struct hg_info* hgi = HG_Get_info(handle);
         assert(hgi);
 
-        //XXX
-        // auto* ctx = new target_context<ID>(rpc_input);
-        // ctx->m_handle = handle;
-        // ctx->m_size = 512;
-        // ctx->m_buffer = calloc(1, 512);
-        // assert(ctx->m_buffer);
-        //XXX
 
         DEBUG2("Looking up RPC descriptor for [{}]", 
                rpc_names[static_cast<int>(ID)]);
 
         auto rpc_desc = 
-            std::static_pointer_cast<RpcInfoTp>(registered_rpcs_v2.at(ID));
+            std::static_pointer_cast<RpcInfoTp>(
+                    detail::registered_rpcs_v2.at(ID));
 
         RpcInput<ID> rpc_input = RpcInput<ID>(hg_input);
 
-//        request req(handle);
-//
-//        RpcOutput<ID> output_val = 
-//            rpc_desc->invoke_handler(req, event::on_completion, rpc_input);
+        request req(handle);
 
-//        ret = HG_Respond(
-//                //TODO
-//                handle,
-//                NULL,
-//                NULL,
-//                &output_val);
-//        assert(ret == HG_SUCCESS);
-
-        HG_Destroy(handle);
-        // free(ctx->m_buffer);
-        // delete ctx;
+        rpc_desc->invoke_user_handler(std::move(req), rpc_input);
 
         return HG_SUCCESS;
     }
+
 };
 
 /** 
  * Specialization for sending RPCs that require a bulk transfer
  * */
 template <rpc ID>
-struct rpc_processor<ID, message::bulk> {
+struct executor<ID, message::bulk> {
 
     using RpcInfoTp = rpc_descriptor<ID>;
-    using OutputTp = typename RpcInfoTp::output_arg_type;
 
     template <typename ExecutionContext>
     static hg_return_t
@@ -623,51 +565,6 @@ struct rpc_processor<ID, message::bulk> {
         return HG_SUCCESS;
     }
 
-#if 0
-    static hg_return_t
-    forward_completion_callback(const struct hg_cb_info* cbi) {
-
-        using Context = detail::execution_context<ID>;
-
-        auto* ctx = static_cast<Context*>(cbi->arg);
-
-        if(cbi->ret != HG_SUCCESS) {
-            DEBUG("Forward request failed");
-            return cbi->ret;
-        }
-
-        // decode response
-        MercuryOutput<ID> output_val;
-        hg_return_t ret = HG_Get_output(cbi->info.forward.handle, &output_val);
-
-        if(ret != HG_SUCCESS) {
-            throw std::runtime_error(
-                    std::string("Failed to decode RPC response: ") +
-                                HG_Error_to_string(ret));
-        }
-
-        // TODO: actually process response (e.g. check out.ret)
-        // TODO: actually process response (e.g. check out.ret)
-        // TODO: actually process response (e.g. check out.ret)
-
-        // clean up resources consumed by this RPC
-
-        HG_Bulk_free(ctx->m_bulk_handle);
-        HG_Free_output(cbi->info.forward.handle, &output_val);
-        HG_Destroy(cbi->info.forward.handle);
-
-    //    const struct hg_info* hgi = HG_Get_info(ctx->m_handle);
-
-    //    HG_Addr_free(hgi->hg_class, hgi->addr);
-
-
-    //        free(ctx->m_buffer);
-    //    delete ctx;
-
-        return HG_SUCCESS;
-    }
-#endif
-
     static hg_return_t
     process(hg_handle_t handle) {
 
@@ -680,6 +577,9 @@ struct rpc_processor<ID, message::bulk> {
         // register local target buffer for bulk access
         const struct hg_info* hgi = HG_Get_info(handle);
         assert(hgi);
+
+        DEBUG2("Looking up RPC descriptor for [{}]", 
+               rpc_names[static_cast<int>(ID)]);
 
         auto rpc_desc = 
             std::static_pointer_cast<RpcInfoTp>(
@@ -807,6 +707,8 @@ private:
     std::set<endpoint, endpoint_compare> m_endpoints;
 };
 
+template <rpc ID>
+using result_set = std::vector<RpcOutput<ID>>;
 
 /** public */
 
@@ -824,37 +726,67 @@ class rpc_handle {
     detail::forward(ExecutionContext* ctx,
                     MercuryInput&& input);
 
-    using Context = detail::execution_context<ID, rpc_handle<ID>>;
+    using ExecutionContext = 
+        detail::execution_context<ID, rpc_handle<ID>>;
 
     rpc_handle(const hg_context_t * const hg_context,
                const std::vector<std::shared_ptr<detail::address>>& targets,
                const RpcInput<ID>& input) {
 
         m_ctxs.reserve(targets.size());
+        m_outputs.reserve(targets.size());
+        m_futures.reserve(targets.size());
 
         for(auto&& addr : targets) {
+            DEBUG2("Creating execution_context for RPC");
+
             m_ctxs.emplace_back(
-                    std::make_shared<Context>(this, hg_context, addr, input));
+                            std::make_shared<ExecutionContext>(
+                                this, hg_context, addr, input));
+
+            DEBUG2("Creating future for RPC");
+
+            m_futures.emplace_back(
+                    m_ctxs.back()->m_output_promise.get_future());
         }
     }
 
 public:
-    // TODO status(), ret_value(), etc...
-    
+    rpc_handle(const rpc_handle&) = delete;
+    rpc_handle(rpc_handle&&) = default;
+    rpc_handle& operator=(const rpc_handle&) = delete;
+    rpc_handle& operator=(rpc_handle&&) = default;
+
+    ~rpc_handle() {
+        wait();
+    }
+
     void
     wait() const {
+        for(auto&& f : m_futures) {
+            if(f.valid()) {
+                f.wait();
+            }
+        }
     }
 
-    RpcOutput<ID>
+    result_set<ID>
     get() const {
-        // TODO: return a result_set
-        return m_output;
-    }
+        std::vector<RpcOutput<ID>> result_set;
+        result_set.reserve(m_futures.size());
 
+        for(auto&& f : m_futures) {
+            result_set.emplace_back(f.get());
+        }
+
+        return result_set;
+    }
 
 private:
-    std::vector<std::shared_ptr<Context>> m_ctxs;
-    RpcOutput<ID> m_output;
+    //XXX shared_ptr probably no longer needed due to the use of futures
+    std::vector<std::shared_ptr<ExecutionContext>> m_ctxs;
+    std::vector<RpcOutput<ID>> m_outputs;
+    mutable std::vector<std::future<RpcOutput<ID>>> m_futures;
 };
 
 class async_engine {
@@ -875,6 +807,10 @@ class async_engine {
     };
 
 public:
+    async_engine(const async_engine& other) = delete;
+    async_engine(async_engine&& rhs) = default;
+    async_engine& operator=(const async_engine& other) = delete;
+    async_engine& operator=(async_engine&& rhs) = default;
 
     /**
      * Initialize the Mercury asynchronous engine.
@@ -883,7 +819,7 @@ public:
      *                      tranport_type)
      * @param listen  [IN]  listen for incoming connections
      */
-    async_engine(transport_type tr_type, bool listen = false) :
+    async_engine(transport tr_type, bool listen = false) :
         m_shutdown(false),
         m_listen(listen),
         m_transport(tr_type),
@@ -900,7 +836,7 @@ public:
                 return known_transports.at(tr_type);
             }()) {
 
-        logging::set_debug_output_level(2);
+        //logging::set_debug_output_level(2);
 
         DEBUG("Initializing Mercury asynchronous engine");
 
@@ -1173,7 +1109,7 @@ public:
     post(const endpoint_set& targets,
          Args&&... args) {
 
-        DEBUG2("  Posting RPC");
+        DEBUG2("Posting RPC");
 
         std::vector<std::shared_ptr<detail::address>> addrs;
         std::transform(targets.begin(), targets.end(),
@@ -1187,6 +1123,7 @@ public:
                            addrs, 
                            RpcInput<ID>(std::forward<Args>(args)...));
 
+        // TODO: move to a private function in rpc_handle class
         std::size_t i = 0;
 
         for(const auto& ctx : handle.m_ctxs) {
@@ -1194,7 +1131,7 @@ public:
             using MESSAGE = typename detail::rpc_descriptor<ID>::message_type;
 
             hg_return ret = 
-                detail::rpc_processor<ID, MESSAGE>::post(ctx.get());
+                detail::executor<ID, MESSAGE>::post(ctx.get());
 
             // if this submission fails, cancel all previously posted RPCs
             if(ret != HG_SUCCESS) {
@@ -1224,7 +1161,7 @@ public:
             using MESSAGE = typename detail::rpc_descriptor<ID>::message_type;
 
             hg_return ret = 
-                detail::rpc_processor<ID, MESSAGE>::post(ctx.get());
+                detail::executor<ID, MESSAGE>::post(ctx.get());
 
             // if this submission fails, cancel all previously posted RPCs
             if(ret != HG_SUCCESS) {
@@ -1306,19 +1243,14 @@ public:
         detail::bulk_transfer(std::move(req), ctx, completion_callback);
     }
 
-    template <rpc ID, typename Output>
+    template <rpc ID, typename... Args>
     void
     respond(request&& req, 
-            Output&& out) {
+            Args&&... args) const {
 
-        detail::respond(std::move(req), MercuryOutput<ID>(out));
-
-        //XXX required? if so, move to ~request()
-        //HG_Bulk_free(ctx->m_bulk_handle);
-
-        // since req is no longer forwarded to any callback, req goes out of 
-        // scope here and the Mercury handle is freed by the 
-        // ~request() destructor
+        RpcOutput<ID> out(std::forward<Args>(args)...);
+        detail::respond(std::move(req), 
+                        MercuryOutput<ID>(out));
     }
 
 private:
@@ -1416,7 +1348,7 @@ private:
     hg_class_t* m_hg_class;
     hg_context_t* m_hg_context;
     bool m_listen;
-    const transport_type m_transport;
+    const transport m_transport;
     const char* const m_transport_prefix;
     std::thread m_runner;
 
@@ -1486,8 +1418,11 @@ lookup_completion_callback(const struct hg_cb_info* cbi) {
 template <rpc ID, typename InputTp>
 inline hg_return_t
 rpc_handler(hg_handle_t handle) {
-    using SelfType = typename rpc_descriptor<ID>::processor;
-    return SelfType::process(handle);
+    using Descriptor = rpc_descriptor<ID>;
+    using Executor = typename Descriptor::executor;
+
+
+    return Executor::process(handle);
 }
 
 } // namespace detail

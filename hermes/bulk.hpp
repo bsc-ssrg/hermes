@@ -112,8 +112,6 @@ public:
      * @hg_bulk_t type (useful for serializing) */
     explicit operator hg_bulk_t() {
 
-        INFO("explicit {} called", __func__);
-
         hg_bulk_t bulk_handle;
 
         void** ptrs = reinterpret_cast<void**>(

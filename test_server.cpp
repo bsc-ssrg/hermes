@@ -22,10 +22,13 @@ send_file_handler(hermes::request&& req,
 
 struct example_class {
 
+    example_class(const hermes::async_engine& hg) :
+        m_hg(hg) { }
+
     const int m_retval = 36;
 
     void
-    send_message_handler(const hermes::request& req, 
+    send_message_handler(hermes::request&& req, 
                          const hermes::send_message_args& args) {
 
         (void) req;
@@ -37,7 +40,22 @@ struct example_class {
 
         INFO("Member callback invoked: {}(\"{}\") = {}!", 
              __FUNCTION__, args.get_message(), "?");
+
+        if(req.requires_response()) {
+            m_hg.respond<hermes::rpc::send_message>(std::move(req), 42);
+
+            // other valid options:
+            //
+            // hermes::send_message_retval rv(42);
+            // m_hg.respond<hermes::rpc::send_message>(std::move(req), rv);
+            //
+            // m_hg.respond<hermes::rpc::send_message>(
+            //                  std::move(req), 
+            //                  hermes::send_message_retval{42});
+        }
     }
+
+    const hermes::async_engine& m_hg;
 };
 
 int
@@ -49,8 +67,7 @@ main(int argc, char* argv[]) {
     (void) argv;
 
     try {
-        // TODO: rename transport_type to transport
-        hermes::async_engine hg(hermes::transport_type::bmi_tcp, true);
+        hermes::async_engine hg(hermes::transport::bmi_tcp, true);
 
         const auto send_buffer_handler = 
             [&](hermes::request&& req,
@@ -116,7 +133,7 @@ main(int argc, char* argv[]) {
 
         hg.register_handler<hermes::rpc::send_file>(send_file_handler);
 
-        example_class ex;
+        example_class ex(hg);
 
         hg.register_handler<hermes::rpc::send_message>(
                 std::bind(&example_class::send_message_handler, 
