@@ -14,8 +14,7 @@
 #include <mercury_proc_string.h>
 
 // hermes includes
-#include <hermes/event.hpp>
-#include <hermes/bulk.hpp>
+#include <hermes/exposed_memory.hpp>
 
 namespace hermes {
 
