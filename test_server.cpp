@@ -67,7 +67,7 @@ main(int argc, char* argv[]) {
     (void) argv;
 
     try {
-        hermes::async_engine hg(hermes::transport::bmi_tcp, true);
+        hermes::async_engine hg(hermes::transport::ofi_tcp, true);
 
         const auto send_buffer_handler = 
             [&](hermes::request&& req,

@@ -3,6 +3,8 @@
 
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include <fmt/ostream.h>
+#include <thread>
 
 namespace logging {
 static unsigned int debug_output_level = 1;
@@ -32,13 +34,16 @@ set_debug_output_level(unsigned int level) {
 #define DEBUG2(...) \
     DEBUG_HELPER(2u, __VA_ARGS__);
 
+#define DEBUG3(...) \
+    DEBUG_HELPER(3u, __VA_ARGS__);
 
 #define DEBUG_HELPER(level, ...)                                            \
     do {                                                                    \
         __typeof(level) l = (level);                                        \
         if(logging::debug_output_level >= l) {                              \
-            fmt::print(stdout, "[{}:{}()] {} {}\n", __FILE__,  __func__,    \
-                       "DEBUG:", fmt::format(__VA_ARGS__));                 \
+            fmt::print(stdout, "[{}:{}()] [{}] {} {}\n", __FILE__,  __func__,    \
+                       std::this_thread::get_id(), "DEBUG:",                \
+                       fmt::format(__VA_ARGS__));                           \
         }                                                                   \
     } while(0);
 
@@ -51,6 +56,9 @@ set_debug_output_level(unsigned int level) {
 #define DEBUG2(...)     \
     DEBUG(__VA_ARGS__)
 
+#define DEBUG3(...)     \
+    DEBUG(__VA_ARGS__)
+
 #endif
 
     
@@ -61,7 +69,7 @@ set_debug_output_level(unsigned int level) {
 
 #define FATAL(...) \
     do { \
-        fmt::print(stderr, "FATAL: " __VA_ARGS__); \
+        fmt::print(stderr, "FATAL: {}\n", fmt::format(__VA_ARGS__)); \
         exit(1); \
     } while(0);
 

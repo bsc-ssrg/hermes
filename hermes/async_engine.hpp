@@ -12,6 +12,7 @@
 #include <vector>
 #include <utility>
 #include <future>
+#include <chrono>
 
 // C includes
 #include <mercury.h>
@@ -32,6 +33,12 @@
 #endif
 
 namespace hermes {
+
+enum class request_status {
+    created,
+    timeout,
+    cancelled
+};
 
 namespace detail {
 
@@ -118,8 +125,67 @@ forward(ExecutionContext* ctx,
     const auto completion_callback = 
         [](const struct hg_cb_info* cbi) -> hg_return_t {
 
+        auto* ctx = reinterpret_cast<ExecutionContext*>(cbi->arg);
+
+        if(cbi->ret == HG_CANCELED) {
+            switch(ctx->m_status) {
+                case request_status::timeout: 
+                {
+                    DEBUG2("Request timed out, reposting");
+
+                    auto&& hg_input = MercuryInput(ctx->m_input);
+
+                    // repost the request
+                    detail::forward<ExecutionContext, 
+                                    MercuryInput, 
+                                    MercuryOutput,
+                                    RpcOutput>(
+                                        ctx, 
+                                        std::forward<MercuryInput>(hg_input));
+                    break;
+                }
+
+                case request_status::cancelled:
+                {
+                    // this can only happen if the request timed out repeteadly
+                    // and we exhausted the configured retries
+                    // The only option is to definitely cancel the request and
+                    // set an exception for the user
+                    DEBUG2("Request was cancelled");
+
+                    ctx->m_output_promise.set_exception(
+                            std::make_exception_ptr(
+                                std::runtime_error("Request timed out")));
+
+                    if(cbi->info.forward.handle != HG_HANDLE_NULL) {
+                        HG_Destroy(cbi->info.forward.handle);
+                    }
+                    break;
+                }
+
+                default:
+                    DEBUG2("Request is in an inconsistent state");
+                    ctx->m_output_promise.set_exception(
+                            std::make_exception_ptr(
+                                std::runtime_error("Request is in an "
+                                                   "inconsistent state")));
+
+                    if(cbi->info.forward.handle != HG_HANDLE_NULL) {
+                        HG_Destroy(cbi->info.forward.handle);
+                    }
+            }
+
+            return cbi->ret;
+        }
+
         if(cbi->ret != HG_SUCCESS) {
-            DEBUG("Forward request failed");
+            DEBUG("Forward request failed: {}", HG_Error_to_string(cbi->ret));
+
+            ctx->m_output_promise.set_exception(
+                    std::make_exception_ptr(
+                        std::runtime_error("Request failed: " + 
+                            std::string(HG_Error_to_string(cbi->ret)))));
+
             return cbi->ret;
         }
 
@@ -133,11 +199,7 @@ forward(ExecutionContext* ctx,
                                 HG_Error_to_string(ret));
         }
 
-        auto* ctx = reinterpret_cast<ExecutionContext*>(cbi->arg);
-
         // TODO: check if this needs to be done in a critical region
-//        ctx->m_parent->m_outputs[0] = RpcOutput(output_val);
-
         DEBUG2("Setting promise");
 
         ctx->m_output_promise.set_value(RpcOutput(output_val));
@@ -330,6 +392,7 @@ struct address {
         HG_Addr_free(const_cast<hg_class_t*>(m_hg_class), m_hg_addr);
     }
 
+    // TODO: rename to mercury_address()
     hg_addr_t
     fetch() const {
         return m_hg_addr;
@@ -340,21 +403,22 @@ struct address {
 };
 
 /** Context required by the RPC's originator (i.e. the client) */
-template <rpc ID, typename Handle>
+template <rpc ID, typename RpcHandle>
 struct execution_context {
 
-    execution_context(Handle* parent,
+    execution_context(RpcHandle* parent,
                       const hg_context_t * const hg_context,
                       const std::shared_ptr<detail::address>& address,
                       const RpcInput<ID>& input) :
         m_parent(parent),
         m_hg_context(hg_context),
+        m_handle(HG_HANDLE_NULL),
+        m_bulk_handle(HG_BULK_NULL),
+        m_status(request_status::created),
         m_address(address),
         m_rpc_descriptor(detail::rpc_descriptor<ID>()),
-        m_input(input),
+        m_input(input)
 //        m_hg_input(m_input),
-    m_handle(HG_HANDLE_NULL),
-    m_bulk_handle(HG_BULK_NULL)
 
 
     {
@@ -366,7 +430,7 @@ struct execution_context {
     }
 
     ~execution_context() { 
-        DEBUG2("~execution_context()");
+        DEBUG2("{}()", __func__);
     }
 
     const hg_context_t*
@@ -384,12 +448,14 @@ struct execution_context {
         return m_rpc_descriptor.m_type;
     }
 
-
+ 
+    // TODO: rename to mercury_op_id()
     hg_id_t
     hg_id() const {
         return m_rpc_descriptor.m_hg_id;
     }
 
+    // TODO: rename to mercury_address()
     hg_addr_t
     hg_addr() const {
         return m_address->fetch();
@@ -405,20 +471,18 @@ struct execution_context {
 ///        return m_hg_input;
 ///    }
 
-    Handle* m_parent;
+    RpcHandle* m_parent;
     const hg_context_t* const m_hg_context;
+    hg_handle_t m_handle;
+    hg_bulk_t m_bulk_handle;
+    std::atomic<request_status> m_status;
+
     const std::shared_ptr<detail::address> m_address;
     const rpc_descriptor<ID> m_rpc_descriptor;
     RpcInput<ID> m_input;
 
     std::promise<RpcOutput<ID>> m_output_promise;
 
-    //MercuryInput<ID> m_hg_input;
-
-//    RpcOutputArgTp<ID> m_output_vals;
-
-    hg_handle_t m_handle;
-    hg_bulk_t m_bulk_handle;
 };
 
 
@@ -463,6 +527,10 @@ struct executor<ID, message::simple> {
 
     using RpcInfoTp = rpc_descriptor<ID>;
 
+    // TODO: this function and repost() can probably return void and throw
+    // an exception if needed. Also, we could cache hg_input into the context
+    // to avoid converting it in the event of a repost. Also++ all this could
+    // probably be done in the constructor of the context
     template <typename ExecutionContext>
     static hg_return_t
     post(ExecutionContext* ctx) {
@@ -474,6 +542,28 @@ struct executor<ID, message::simple> {
         ctx->m_handle = detail::create_handle(ctx->m_hg_context,
                                               ctx->hg_addr(),
                                               ctx->hg_id());
+
+        // convert the hermes RPC input to Mercury RPC input
+        // (this relies on the explicit conversion constructor defined for 
+        // the type)
+        auto&& hg_input = MercuryInput<ID>(ctx->m_input);
+
+        // send the RPC
+        detail::forward<ExecutionContext, 
+                        MercuryInput<ID>, 
+                        MercuryOutput<ID>,
+                        RpcOutput<ID>>(
+                                ctx, 
+                                std::forward<MercuryInput<ID>>(hg_input));
+
+        return HG_SUCCESS;
+    }
+
+    template <typename ExecutionContext>
+    static hg_return_t
+    repost(ExecutionContext* ctx) {
+
+        DEBUG2("{}(ctx={})", __func__, fmt::ptr(ctx));
 
         // convert the hermes RPC input to Mercury RPC input
         // (this relies on the explicit conversion constructor defined for 
@@ -553,6 +643,28 @@ struct executor<ID, message::bulk> {
         // also save the Mercury bulk_handle in the execution context so that
         // we can refer to it later
         ctx->m_bulk_handle = hg_input.bulk_handle;
+
+        // send the RPC
+        detail::forward<ExecutionContext, 
+                        MercuryInput<ID>, 
+                        MercuryOutput<ID>,
+                        RpcOutput<ID>>(
+                                ctx, 
+                                std::forward<MercuryInput<ID>>(hg_input));
+
+        return HG_SUCCESS;
+    }
+
+    template <typename ExecutionContext>
+    static hg_return_t
+    repost(ExecutionContext* ctx) {
+
+        DEBUG2("{}(ctx={})", __func__, fmt::ptr(ctx));
+
+        // convert the hermes RPC input to Mercury RPC input
+        // (this relies on the explicit conversion constructor defined for 
+        // the type)
+        auto&& hg_input = MercuryInput<ID>(ctx->m_input);
 
         // send the RPC
         detail::forward<ExecutionContext, 
@@ -734,7 +846,6 @@ class rpc_handle {
                const RpcInput<ID>& input) {
 
         m_ctxs.reserve(targets.size());
-        m_outputs.reserve(targets.size());
         m_futures.reserve(targets.size());
 
         for(auto&& addr : targets) {
@@ -758,6 +869,7 @@ public:
     rpc_handle& operator=(rpc_handle&&) = default;
 
     ~rpc_handle() {
+        DEBUG2("{}", __func__);
         wait();
     }
 
@@ -772,11 +884,77 @@ public:
 
     result_set<ID>
     get() const {
-        std::vector<RpcOutput<ID>> result_set;
-        result_set.reserve(m_futures.size());
 
-        for(auto&& f : m_futures) {
-            result_set.emplace_back(f.get());
+        assert(m_futures.size() == m_ctxs.size());
+
+        DEBUG("Getting RPC results (pending: {})", m_futures.size());
+
+        constexpr const auto TIMEOUT = std::chrono::seconds(1);
+        constexpr const auto RETRIES = 5;
+
+        std::vector<RpcOutput<ID>> result_set;
+        std::vector<bool> retrieved(m_futures.size(), false);
+        std::vector<uint8_t> retries(m_futures.size(), RETRIES);
+
+
+        std::size_t pending_requests = m_futures.size();
+
+        while(pending_requests != 0) {
+            for(std::size_t i = 0; i < m_futures.size(); ++i) {
+
+                if(retrieved[i]) {
+                    continue;
+                }
+
+                switch(m_futures[i].wait_for(TIMEOUT)) {
+                    case std::future_status::timeout: 
+                    {
+
+                        m_ctxs[i]->m_status = 
+                                (retries[i]-- != 0 ?
+                                    request_status::timeout :
+                                    request_status::cancelled);
+
+                        DEBUG2("Mercury request timed out, {}",
+                                m_ctxs[i]->m_status == request_status::timeout ?
+                                fmt::format("reposting request ({} of {})", RETRIES - retries[i], RETRIES) :
+                                "cancelling");
+
+
+                        // cancel the pending Mercury request, this causes
+                        // its completion callback to be invoked and we can
+                        // use it to either repost the request or make it 
+                        // gracefully dispose of itself depending on the value
+                        // of request_status
+                        hg_return_t ret = HG_Cancel(m_ctxs[i]->m_handle);
+
+                        if(ret != HG_SUCCESS) {
+                            WARNING("Failed to cancel RPC: {}", 
+                                    HG_Error_to_string(ret));
+                        }
+                        break;
+                    }
+
+                    case std::future_status::ready:
+                    {
+                        // the request "completed", i.e. we can retrieve either
+                        // a valid result or an error condition
+                        DEBUG2("RPC completed. Retrieving result.");
+                        result_set.emplace_back(m_futures[i].get());
+                        retrieved[i] = true;
+                        --pending_requests;
+                        break;
+                    }
+
+                    default:
+                    {
+                        DEBUG2("RPC future is in an inconsistent state. Aborting.");
+                        throw std::runtime_error("Unexpected future_status in "
+                                                 "wait_for()");
+                    }
+                }
+
+            }
         }
 
         return result_set;
@@ -785,7 +963,6 @@ public:
 private:
     //XXX shared_ptr probably no longer needed due to the use of futures
     std::vector<std::shared_ptr<ExecutionContext>> m_ctxs;
-    std::vector<RpcOutput<ID>> m_outputs;
     mutable std::vector<std::future<RpcOutput<ID>>> m_futures;
 };
 
@@ -836,18 +1013,56 @@ public:
                 return known_transports.at(tr_type);
             }()) {
 
-        //logging::set_debug_output_level(2);
+
+#ifdef HERMES_DEBUG
+        char* v = getenv("HERMES_LOG_LEVEL");
+
+        if(v != NULL) {
+            logging::set_debug_output_level(std::stoul(v));
+        }
+#endif
 
         DEBUG("Initializing Mercury asynchronous engine");
 
         DEBUG("  Initializing transport layer");
 
-        m_hg_class = HG_Init(m_transport_prefix,
+        const auto address = make_address("127.0.0.1", 22222);
+
+        m_hg_class = HG_Init(address.c_str(),
                              m_listen ? HG_TRUE : HG_FALSE);
 
         if(m_hg_class == NULL) {
             throw std::runtime_error("Failed to initialize Mercury");
         }
+
+        hg_addr_t self_addr;
+        hg_return_t ret = HG_Addr_self(m_hg_class, &self_addr);
+
+        if(ret != HG_SUCCESS) {
+            throw std::runtime_error("Failed to retrieve self address: " + 
+                    std::string(HG_Error_to_string(ret)));
+        }
+
+        hg_size_t buf_size = 0;
+        ret = HG_Addr_to_string(m_hg_class, NULL, &buf_size, self_addr);
+
+        if(ret != HG_SUCCESS) {
+            throw std::runtime_error("Failed to compute address length " +
+                                     std::string(HG_Error_to_string(ret)));
+        }
+
+HG_Addr_free(m_hg_class, self_addr);
+
+        auto text_address = new char[buf_size];
+
+        ret = HG_Addr_to_string(m_hg_class, text_address, &buf_size, self_addr);
+
+        if(ret != HG_SUCCESS) {
+            throw std::runtime_error("Failed to compute address length " +
+                                     std::string(HG_Error_to_string(ret)));
+        }
+
+        INFO("Self address: {}", text_address);
 
         DEBUG2("    m_hg_class: {}", static_cast<void*>(m_hg_class));
 
@@ -890,7 +1105,7 @@ public:
 
             if(err != HG_SUCCESS) {
                 // can't throw here
-                FATAL("Failed to destroy context: {}\n",
+                ERROR("Failed to destroy context: {}\n",
                       HG_Error_to_string(err));
             }
         }
@@ -901,7 +1116,7 @@ public:
 
             if(err != HG_SUCCESS) {
                 // can't throw here
-                FATAL("Failed to shut down transport layer: {}\n",
+                ERROR("Failed to shut down transport layer: {}\n",
                       HG_Error_to_string(err));
             }
         }
@@ -941,7 +1156,7 @@ public:
     lookup(const std::string& name,
            std::size_t port) const {
 
-        const auto address = make_address(name, port);
+        /*const */auto address = make_address(name, port);
 
         {
             std::lock_guard<std::mutex> lock(m_addr_cache_mutex);
@@ -953,6 +1168,8 @@ public:
                 return endpoint(name, port, it->second);
             }
         }
+
+        address = "ofi+sockets://fi_sockaddr_in://127.0.0.1:22222";
 
         DEBUG("Looking up endpoint \"{}\"", address);
 
@@ -1136,7 +1353,14 @@ public:
             // if this submission fails, cancel all previously posted RPCs
             if(ret != HG_SUCCESS) {
                 for(std::size_t j = 0; j < i; ++j) {
-                    (void) HG_Cancel(handle.m_ctxs[i]->m_handle);
+                    ret = HG_Cancel(handle.m_ctxs[i]->m_handle);
+
+                    if(ret != HG_SUCCESS) {
+                        WARNING("Failed to cancel RPC: {}", 
+                                HG_Error_to_string(ret));
+                    }
+
+                    ctx->m_status = request_status::timeout;
                 }
 
                 throw std::runtime_error("Failed to post RPC: " + 
@@ -1320,25 +1544,28 @@ private:
 
         while(!m_shutdown) {
             do {
-
-//                DEBUG("Triggering pending callbacks");
-
                 ret = HG_Trigger(m_hg_context,
                                  0,
                                  1,
                                  &actual_count);
+
+                DEBUG3("HG_Trigger(context={}, timeout={}, max_count={}, "
+                       "actual_count={}) = {}", fmt::ptr(m_hg_context), 0, 1,
+                       actual_count, HG_Error_to_string(ret));
+
             } while((ret == HG_SUCCESS) &&
                     (actual_count != 0) &&
                     !m_shutdown);
 
             if(!m_shutdown) {
-//                DEBUG("Progressing RPC execution");
-                ret = HG_Progress(m_hg_context,
-                                  100);
+                ret = HG_Progress(m_hg_context, 100);
+
+                DEBUG3("HG_Progress(context={}, timeout={}) = {}", 
+                       fmt::ptr(m_hg_context), 100, HG_Error_to_string(ret));
 
                 if(ret != HG_SUCCESS && ret != HG_TIMEOUT) {
-                    WARNING("Unexpected return code {} from HG_Progress: {}",
-                            ret, HG_Error_to_string(ret));
+                    FATAL("Unexpected return code {} from HG_Progress: {}",
+                          ret, HG_Error_to_string(ret));
                 }
             }
         }

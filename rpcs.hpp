@@ -113,6 +113,15 @@ class send_message_args {
     friend class detail::origin_context<rpc::send_message>;
     friend class detail::executor<rpc::send_message, message::simple>;
 
+    template <
+        typename ExecutionContext, 
+        typename MercuryInput, 
+        typename MercuryOutput,
+        typename RpcOutput>
+    friend void
+    detail::forward(ExecutionContext* ctx,
+                    MercuryInput&& input);
+
 public:
     send_message_args(const std::string& message) :
         m_message(message) { }
@@ -177,6 +186,16 @@ class send_file_args {
 
     friend class detail::origin_context<rpc::send_file>;
     friend class detail::executor<rpc::send_file, message::bulk>;
+    friend class async_engine;
+
+    template <
+        typename ExecutionContext, 
+        typename MercuryInput, 
+        typename MercuryOutput,
+        typename RpcOutput>
+    friend void
+    detail::forward(ExecutionContext* ctx,
+                    MercuryInput&& input);
 
 public:
     send_file_args(const std::string& pathname,
@@ -214,6 +233,15 @@ class send_buffer_args {
 
     friend class detail::origin_context<rpc::send_buffer>;
     friend class detail::executor<rpc::send_buffer, message::bulk>;
+
+    template <
+        typename ExecutionContext, 
+        typename MercuryInput, 
+        typename MercuryOutput,
+        typename RpcOutput>
+    friend void
+    detail::forward(ExecutionContext* ctx,
+                    MercuryInput&& input);
 
 public:
     send_buffer_args(const std::string& pathname,

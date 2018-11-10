@@ -73,10 +73,10 @@ main(int argc, char* argv[]) {
     try {
 
         // initialize the engine with appropriate transport protocol
-        async_engine hg(transport::bmi_tcp);
+        async_engine hg(transport::ofi_tcp);
 
         endpoint_set endps = hg.lookup({
-            {"localhost", 22222},
+            {"127.0.0.1", 22222},
         });
 
 //        mapped_buffer buf("rpcs.hpp");
@@ -103,6 +103,8 @@ main(int argc, char* argv[]) {
         for(auto&& rv : results) {
             INFO("retval: {}", rv.retval());
         }
+
+        return 0;
 
         /*********************************************************************** 
          * Example 2: posting an RPC with arbitrary arguments plus an 
@@ -150,8 +152,8 @@ main(int argc, char* argv[]) {
         }
     } 
     catch(const std::exception& ex) {
+        ERROR("{}\n", ex.what());
         throw;
-        FATAL("{}\n", ex.what());
     }
 
     return 0;
