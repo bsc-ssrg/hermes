@@ -5,7 +5,7 @@
 #include <sys/mman.h>
 
 #include "rpcs.hpp"
-#include "hermes.hpp"
+#include <hermes.hpp>
 
 struct mapped_buffer {
 
@@ -103,8 +103,6 @@ main(int argc, char* argv[]) {
         for(auto&& rv : results) {
             INFO("retval: {}", rv.retval());
         }
-
-        return 0;
 
         /*********************************************************************** 
          * Example 2: posting an RPC with arbitrary arguments plus an 

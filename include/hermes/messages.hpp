@@ -6,10 +6,12 @@ namespace hermes {
 /** Message types supported by the engine. We need to use tags rather than 
  * an enum so that the type deduction machinery generates the appropirate 
  * processing functions */
-struct message {
-    struct simple { };
-    struct bulk { };
-};
+namespace message {
+
+struct simple { };
+struct bulk { };
+
+} // namespace message
 
 } // namespace hermes
 

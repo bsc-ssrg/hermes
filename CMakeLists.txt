@@ -85,6 +85,7 @@ if (HERMES_LOGGING)
   
   if(fmt_FOUND)
     target_compile_definitions(hermes INTERFACE HAVE_FMT=1)
+    target_link_libraries(hermes INTERFACE fmt)
   else()
     target_compile_definitions(hermes INTERFACE HAVE_FMT=0)
   endif()
@@ -100,4 +101,4 @@ set_property(CACHE RPC_PROTOCOL PROPERTY STRINGS
 )
 message(STATUS "RPC protocol: '${RPC_PROTOCOL}'")
 
-target_link_libraries(hermes INTERFACE mercury fmt)
+target_link_libraries(hermes INTERFACE mercury)

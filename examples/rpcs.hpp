@@ -5,7 +5,6 @@
 #include <unordered_map>
 #include <functional>
 #include <memory>
-#include <hermes/messages.hpp>
 #include <tuple>
 #include <vector>
 
@@ -15,6 +14,7 @@
 
 // hermes includes
 #include <hermes/exposed_memory.hpp>
+#include <hermes/messages.hpp>
 
 namespace hermes {
 
@@ -102,15 +102,15 @@ MERCURY_GEN_PROC(send_buffer_out_t,
 
 
 namespace detail { 
-template <rpc ID> struct origin_context; 
+//template <rpc ID> struct origin_context; 
 template <rpc ID, typename MessageTp> struct executor; 
 }
 
 
 class send_message_args {
 
-    friend class detail::origin_context<rpc::send_message>;
-    friend class detail::executor<rpc::send_message, message::simple>;
+    //friend class detail::origin_context<rpc::send_message>;
+    friend struct detail::executor<rpc::send_message, message::simple>;
 
     template <
         typename ExecutionContext, 
@@ -126,7 +126,7 @@ public:
         m_message(message) { }
 
     std::string
-    get_message() const {
+    message() const {
         return m_message;
     }
 
@@ -183,8 +183,8 @@ private:
 
 class send_file_args {
 
-    friend class detail::origin_context<rpc::send_file>;
-    friend class detail::executor<rpc::send_file, message::bulk>;
+    //friend class detail::origin_context<rpc::send_file>;
+    friend struct detail::executor<rpc::send_file, message::bulk>;
     friend class async_engine;
 
     template <
@@ -203,12 +203,12 @@ public:
         m_exposed_memory(memory) { }
 
     std::string
-    get_pathname() const {
+    pathname() const {
         return m_pathname;
     }
 
     exposed_memory
-    get_exposed_memory() const {
+    buffers() const {
         return m_exposed_memory;
     }
 
@@ -230,8 +230,8 @@ class send_file_retval { };
 
 class send_buffer_args {
 
-    friend class detail::origin_context<rpc::send_buffer>;
-    friend class detail::executor<rpc::send_buffer, message::bulk>;
+    //friend class detail::origin_context<rpc::send_buffer>;
+    friend struct detail::executor<rpc::send_buffer, message::bulk>;
 
     template <
         typename ExecutionContext, 
@@ -249,12 +249,12 @@ public:
         m_exposed_memory(memory) { }
 
     std::string
-    get_pathname() const {
+    pathname() const {
         return m_pathname;
     }
 
     exposed_memory
-    get_exposed_memory() const {
+    buffers() const {
         return m_exposed_memory;
     }
 
@@ -356,8 +356,8 @@ rpc_handler(hg_handle_t handle);
 template <rpc>
 struct rpc_descriptor : public rpc_descriptor_base {};
 
-template <rpc ID, typename MsgTp>
-struct executor;
+// template <rpc ID, typename MsgTp>
+// struct executor;
 
 /******************************************************************************/
 /** specialized rpc_info for rpc::message */

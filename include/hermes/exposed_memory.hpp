@@ -1,13 +1,17 @@
 #ifndef __HERMES_BULK_HPP__
 #define __HERMES_BULK_HPP__
 
+
 // C includes
 #include <mercury.h>
 #include <alloca.h>
 
-#include <hermes/buffer.hpp>
+// C++ includes
+#include <cassert>
 
-#include <logging.hpp>
+// project includes
+#include <hermes/buffer.hpp>
+#include <hermes/logging.hpp>
 
 
 namespace hermes {

@@ -13,6 +13,7 @@
 #include <utility>
 #include <future>
 #include <chrono>
+#include <algorithm>
 
 // C includes
 #include <mercury.h>
@@ -26,7 +27,7 @@
 #include <hermes/request.hpp>
 #include <hermes/detail/request_status.hpp>
 #include <hermes/detail/mercury_utils.hpp>
-#include <logging.hpp>
+#include <hermes/logging.hpp>
 
 #ifndef __HERMES_RPC_DEFINITIONS_HPP__
 #error "FATAL: RPC definitions not found. "
@@ -150,10 +151,12 @@ struct execution_context {
         return m_rpc_descriptor.m_id;
     }
 
+#if 0
     hermes::message
     type() const {
         return m_rpc_descriptor.m_type;
     }
+#endif
 
  
     // TODO: rename to mercury_op_id()

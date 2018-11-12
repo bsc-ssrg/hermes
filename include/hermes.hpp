@@ -5,5 +5,6 @@
 #include <hermes/exposed_memory.hpp>
 #include <hermes/messages.hpp>
 #include <hermes/async_engine.hpp>
+#include <hermes/logging.hpp>
 
 #endif // __HERMES_HPP__

@@ -1,11 +1,16 @@
 #include <unistd.h>
 
 #include "rpcs.hpp"
-#include "hermes.hpp"
-#include "logging.hpp"
+#include <hermes.hpp>
+
+using hermes::request;
+using hermes::async_engine;
+using hermes::rpc;
+using hermes::send_message_args;
+using hermes::send_buffer_args;
 
 void
-send_file_handler(hermes::request&& req, 
+send_file_handler(request&& req, 
                   const hermes::send_file_args& args) {
 
     (void) req;
@@ -17,45 +22,43 @@ send_file_handler(hermes::request&& req,
     // out.ret_val = 42;
 
     INFO("Callback invoked: {}(\"{}\") = {}!", 
-         __FUNCTION__, args.get_pathname(), "?");
+         __FUNCTION__, args.pathname(), "?");
 }
 
 struct example_class {
 
-    example_class(const hermes::async_engine& hg) :
+    example_class(const async_engine& hg) :
         m_hg(hg) { }
 
     const int m_retval = 36;
 
     void
-    send_message_handler(hermes::request&& req, 
-                         const hermes::send_message_args& args) {
+    send_message_handler(request&& req, 
+                         const send_message_args& args) {
 
         (void) req;
 
-        INFO("RPC [send_message] received");
-
-        //hermes::send_message_out_t out;
-        //out.ret_val = m_retval;
-
-        INFO("Member callback invoked: {}(\"{}\") = {}!", 
-             __FUNCTION__, args.get_message(), "?");
+        INFO("RPC received:");
+        INFO("    type: send_message,"); 
+        INFO("    args: \"{}\"", args.message());
 
         if(req.requires_response()) {
-            m_hg.respond<hermes::rpc::send_message>(std::move(req), 42);
-
-            // other valid options:
-            //
-            // hermes::send_message_retval rv(42);
-            // m_hg.respond<hermes::rpc::send_message>(std::move(req), rv);
-            //
-            // m_hg.respond<hermes::rpc::send_message>(
-            //                  std::move(req), 
-            //                  hermes::send_message_retval{42});
+            /*******************************************************************
+             * Other valid options:
+             *
+             * hermes::send_message_retval rv(42);
+             * m_hg.respond<hermes::rpc::send_message>(std::move(req), rv);
+             *
+             * m_hg.respond<hermes::rpc::send_message>(
+             *                  std::move(req), 
+             *                  hermes::send_message_retval{42});
+             ******************************************************************/
+            m_hg.respond<rpc::send_message>(std::move(req), 0);
+            INFO("  Response sent with value {}", 0);
         }
     }
 
-    const hermes::async_engine& m_hg;
+    const async_engine& m_hg;
 };
 
 int
@@ -73,15 +76,7 @@ main(int argc, char* argv[]) {
             [&](hermes::request&& req,
                 const hermes::send_buffer_args& args) {
 
-                // hermes::send_buffer_retval out;
-                // out.ret_val = 54;
-
-                INFO("RPC [send_buffer] received");
-
-                INFO("Lambda callback invoked: {}(\"{}\") = {}!", 
-                     __FUNCTION__, args.get_pathname(), "?");
-
-                auto remote_buffers = args.get_exposed_memory();
+                auto remote_buffers = args.buffers();
 
                 // 1. allocate local buffers according to info in remote_buffers
                 // 2. local_buffers = expose(bufs)
@@ -90,18 +85,23 @@ main(int argc, char* argv[]) {
                 std::vector<hermes::mutable_buffer> bufvec;
                 bufvec.reserve(remote_buffers.count());
 
-                for(auto&& remote_buf : args.get_exposed_memory()) {
+                for(auto&& remote_buf : args.buffers()) {
                     std::size_t remote_size = remote_buf.size();
                     char* data = new char[remote_size];
                     bufvec.emplace_back(data, remote_size);
                 }
+
+                INFO("RPC received:");
+                INFO("    type: send_buffer,"); 
+                INFO("    args: remote_buffers{{count={}, total_size={}}}", 
+                        remote_buffers.count(), remote_buffers.size());
 
                 // TODO: remove the need to expose local buffers and just pass
                 // the bufvec directly to async_pull
                 auto local_buffers = 
                     hg.expose(bufvec, hermes::access_mode::write_only);
 
-                INFO("Pulling remote data");
+                INFO("  Pulling remote buffers");
 
                 // this lambda will be invoked when the pull transfer completes
                 // (we capture bufvec by reference to verify that remote data
@@ -110,17 +110,18 @@ main(int argc, char* argv[]) {
                 const auto do_pull_completion = 
                     [&bufvec, &hg](hermes::request&& req) {
 
-                    INFO("Pull successful!");
+                    INFO("    Pull successful!");
 
                     for(auto&& local_buf : bufvec) {
-                        INFO("Buffer size: {}", local_buf.size());
-                        INFO("Buffer contents: {}", 
+                        INFO("      Buffer size: {}", local_buf.size());
+                        INFO("      Buffer contents: {}", 
                                 reinterpret_cast<char*>(local_buf.data()));
                     }
 
                     if(req.requires_response()) {
                         hermes::send_buffer_retval rv(42);
                         hg.respond<hermes::rpc::send_buffer>(std::move(req), rv);
+                        INFO("  Response sent with value {}", rv.retval());
                     }
                 };
 
@@ -146,7 +147,8 @@ main(int argc, char* argv[]) {
         }
     } 
     catch(const std::exception& ex) {
-        FATAL("{}", ex.what());
+        ERROR("{}", ex.what());
+        throw;
     }
 
     return 0;
