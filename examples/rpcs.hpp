@@ -21,7 +21,6 @@ namespace hermes {
 // forward declarations
 template <typename RpcInput>
 class request;
-class mutable_buffer;
 
 namespace detail {
     template <
@@ -68,30 +67,10 @@ struct enum_class_hash {
 #endif
 
 
-/** Generate types and serialization functions for rpc::send_message */
-MERCURY_GEN_PROC(send_message_in_t,
-        ((hg_const_string_t) (message)))
-
-MERCURY_GEN_PROC(send_message_out_t,
-        ((int32_t) (retval)))
 
 
-/** Generate types and serialization functions for rpc::send_file */
-MERCURY_GEN_PROC(send_file_in_t,
-        ((hg_const_string_t) (pathname))
-        ((hg_bulk_t) (bulk_handle)))
-
-MERCURY_GEN_PROC(send_file_out_t,
-        ((int32_t) (retval)))
 
 
-/** Generate types and serialization functions for rpc::send_file */
-MERCURY_GEN_PROC(send_buffer_in_t,
-        ((hg_const_string_t) (pathname))
-        ((hg_bulk_t) (bulk_handle)))
-
-MERCURY_GEN_PROC(send_buffer_out_t,
-        ((int32_t) (retval)))
 
 
 /** Generate types and serialization functions for rpc::shutdown */
@@ -101,215 +80,17 @@ MERCURY_GEN_PROC(send_buffer_out_t,
 //MERCURY_GEN_PROC(shutdown_out_t,
 //        ((int32_t) (retval)))
 
-
 namespace detail { 
 //template <rpc ID> struct origin_context; 
 template <rpc ID, typename MessageTp> struct executor; 
 }
 
 
-class send_message_args {
-
-    //friend class detail::origin_context<rpc::send_message>;
-    friend struct detail::executor<rpc::send_message, message::simple>;
-
-    template <
-        typename ExecutionContext, 
-        typename MercuryInput, 
-        typename MercuryOutput,
-        typename RpcOutput>
-    friend void
-    detail::forward(ExecutionContext* ctx,
-                    MercuryInput&& input);
-
-public:
-    send_message_args(const std::string& message) :
-        m_message(message) { }
-
-    std::string
-    message() const {
-        return m_message;
-    }
-
-private:
-    explicit send_message_args(send_message_in_t input) :
-        m_message(input.message) { }
-
-    explicit operator send_message_in_t() {
-        return {m_message.c_str()};
-    }
-
-    std::string m_message;
-};
-
-class send_message_retval { 
-
-    friend class async_engine;
-
-    template <
-        typename ExecutionContext, 
-        typename MercuryInput, 
-        typename MercuryOutput,
-        typename RpcOutput>
-    friend void
-    detail::forward(ExecutionContext* ctx,
-                    MercuryInput&& input);
-
-public:
-    send_message_retval(int32_t retval) :
-        m_retval(retval) { }
-
-    int32_t
-    retval() const {
-        return m_retval;
-    }
-
-    void
-    set_retval(int32_t retval) {
-        m_retval = retval;
-    }
-
-private:
-    explicit send_message_retval(const send_message_out_t& out) {
-        m_retval = out.retval;
-    }
-
-    explicit operator send_message_out_t() {
-        return {m_retval};
-    }
-
-    int32_t m_retval;
-};
 
 
-class send_file_args {
-
-    //friend class detail::origin_context<rpc::send_file>;
-    friend struct detail::executor<rpc::send_file, message::bulk>;
-    friend class async_engine;
-
-    template <
-        typename ExecutionContext, 
-        typename MercuryInput, 
-        typename MercuryOutput,
-        typename RpcOutput>
-    friend void
-    detail::forward(ExecutionContext* ctx,
-                    MercuryInput&& input);
-
-public:
-    send_file_args(const std::string& pathname,
-                   const exposed_memory& memory) :
-        m_pathname(pathname),
-        m_exposed_memory(memory) { }
-
-    std::string
-    pathname() const {
-        return m_pathname;
-    }
-
-    exposed_memory
-    buffers() const {
-        return m_exposed_memory;
-    }
-
-private:
-    explicit send_file_args(const send_file_in_t& input) :
-        m_pathname(input.pathname),
-        m_exposed_memory(input.bulk_handle) { }
-
-    explicit operator send_file_in_t() {
-        return {m_pathname.c_str(), hg_bulk_t(m_exposed_memory)};
-    }
-
-    std::string m_pathname;
-    exposed_memory m_exposed_memory;
-};
-
-class send_file_retval { };
 
 
-class send_buffer_args {
 
-    //friend class detail::origin_context<rpc::send_buffer>;
-    friend struct detail::executor<rpc::send_buffer, message::bulk>;
-
-    template <
-        typename ExecutionContext, 
-        typename MercuryInput, 
-        typename MercuryOutput,
-        typename RpcOutput>
-    friend void
-    detail::forward(ExecutionContext* ctx,
-                    MercuryInput&& input);
-
-public:
-    send_buffer_args(const std::string& pathname,
-                     const exposed_memory& memory) :
-        m_pathname(pathname),
-        m_exposed_memory(memory) { }
-
-    std::string
-    pathname() const {
-        return m_pathname;
-    }
-
-    exposed_memory
-    buffers() const {
-        return m_exposed_memory;
-    }
-
-private:
-    explicit send_buffer_args(send_buffer_in_t input) :
-        m_pathname(input.pathname),
-        m_exposed_memory(input.bulk_handle) { }
-
-    explicit operator send_buffer_in_t() {
-        return {m_pathname.c_str(), hg_bulk_t(m_exposed_memory)};
-    }
-
-    std::string m_pathname;
-    exposed_memory m_exposed_memory;
-};
-
-class send_buffer_retval {
-
-    friend class async_engine;
-
-    template <
-        typename ExecutionContext, 
-        typename MercuryInput, 
-        typename MercuryOutput,
-        typename RpcOutput>
-    friend void
-    detail::forward(ExecutionContext* ctx,
-                    MercuryInput&& input);
-
-public:
-    send_buffer_retval(int32_t retval) :
-        m_retval(retval) { }
-
-    int32_t
-    retval() const {
-        return m_retval;
-    }
-
-    void
-    set_retval(int32_t retval) {
-        m_retval = retval;
-    }
-
-private:
-    explicit send_buffer_retval(const send_buffer_out_t& out) {
-        m_retval = out.retval;
-    }
-
-    explicit operator send_buffer_out_t() {
-        return {m_retval};
-    }
-
-    int32_t m_retval;
-};
 
 
 
@@ -357,11 +138,107 @@ rpc_handler(hg_handle_t handle);
 template <rpc>
 struct rpc_descriptor : public rpc_descriptor_base {};
 
-// template <rpc ID, typename MsgTp>
-// struct executor;
+} // namespace detail
 
-/******************************************************************************/
-/** specialized rpc_info for rpc::message */
+
+
+
+
+//==============================================================================
+// definitions for rpc::send_message
+
+// Generate Mercury types and serialization functions.  (field names match
+// those defined by send_message_args and send_message_retval). These
+// definitions are internal and should not be used directly. Classes
+// send_message_args and send_message_retval are provided for public use.
+MERCURY_GEN_PROC(send_message_in_t,
+        ((hg_const_string_t) (message)))
+
+MERCURY_GEN_PROC(send_message_out_t,
+        ((int32_t) (retval)))
+
+// input arguments associated to rpc::send_message
+// TODO: provide a free conversion function rather than explicit conversion 
+// constructors
+class send_message_args {
+
+    //friend class detail::origin_context<rpc::send_message>;
+    friend struct detail::executor<rpc::send_message, message::simple>;
+
+    template <
+        typename ExecutionContext, 
+        typename MercuryInput, 
+        typename MercuryOutput,
+        typename RpcOutput>
+    friend void
+    detail::forward(ExecutionContext* ctx,
+                    MercuryInput&& input);
+
+public:
+    send_message_args(const std::string& message) :
+        m_message(message) { }
+
+    std::string
+    message() const {
+        return m_message;
+    }
+
+private:
+    explicit send_message_args(send_message_in_t input) :
+        m_message(input.message) { }
+
+    explicit operator send_message_in_t() {
+        return {m_message.c_str()};
+    }
+
+    std::string m_message;
+};
+
+
+// return values associated to rpc::send_message
+class send_message_retval { 
+
+    friend class async_engine;
+
+    template <
+        typename ExecutionContext, 
+        typename MercuryInput, 
+        typename MercuryOutput,
+        typename RpcOutput>
+    friend void
+    detail::forward(ExecutionContext* ctx,
+                    MercuryInput&& input);
+
+public:
+    send_message_retval(int32_t retval) :
+        m_retval(retval) { }
+
+    int32_t
+    retval() const {
+        return m_retval;
+    }
+
+    void
+    set_retval(int32_t retval) {
+        m_retval = retval;
+    }
+
+private:
+    explicit send_message_retval(const send_message_out_t& out) {
+        m_retval = out.retval;
+    }
+
+    explicit operator send_message_out_t() {
+        return {m_retval};
+    }
+
+    int32_t m_retval;
+};
+
+
+namespace detail {
+
+// specialization of rpc_descriptor for rpc::send_message
 template <>
 struct rpc_descriptor<rpc::send_message> : public rpc_descriptor_base {
 
@@ -369,20 +246,14 @@ struct rpc_descriptor<rpc::send_message> : public rpc_descriptor_base {
     using output_type = send_message_retval;
     using mercury_input_type = send_message_in_t;
     using mercury_output_type = send_message_out_t;
-
-
-    using input_arg_type = send_message_in_t;
-    using output_arg_type = send_message_out_t;
     using message_type = message::simple;
     using executor = detail::executor<rpc::send_message, message_type>;
-    using requires_reply = std::true_type;
 
     rpc_descriptor() :
         rpc_descriptor_base(
             rpc::send_message,
             rpc_names[static_cast<int>(rpc::send_message)],
             static_cast<hg_id_t>(rpc::send_message),
-            //hg_hash_string(rpc_names[0]),
             HG_GEN_PROC_NAME(send_message_in_t),
             HG_GEN_PROC_NAME(send_message_out_t),
             rpc_handler<rpc::send_message, send_message_in_t>) {}
@@ -408,9 +279,77 @@ struct rpc_descriptor<rpc::send_message> : public rpc_descriptor_base {
     handler_type m_user_handler;
 };
 
+} // namespace detail
 
+
+//==============================================================================
+// definitions for rpc::send_file
+
+// Generate Mercury types and serialization functions.  (field names match
+// those defined by send_file_args and send_file_retval). These
+// definitions are internal and should not be used directly. Classes
+// send_file_args and send_file_retval are provided for public use.
 /******************************************************************************/
-/** specialized rpc_info for rpc::send_file */
+MERCURY_GEN_PROC(send_file_in_t,
+        ((hg_const_string_t) (pathname))
+        ((hg_bulk_t) (bulk_handle)))
+
+MERCURY_GEN_PROC(send_file_out_t,
+        ((int32_t) (retval)))
+
+// input arguments associated to rpc::send_file
+// TODO: provide a free conversion function rather than explicit conversion 
+// constructors
+class send_file_args {
+
+    //friend class detail::origin_context<rpc::send_file>;
+    friend struct detail::executor<rpc::send_file, message::bulk>;
+    friend class async_engine;
+
+    template <
+        typename ExecutionContext, 
+        typename MercuryInput, 
+        typename MercuryOutput,
+        typename RpcOutput>
+    friend void
+    detail::forward(ExecutionContext* ctx,
+                    MercuryInput&& input);
+
+public:
+    send_file_args(const std::string& pathname,
+                   const exposed_memory& memory) :
+        m_pathname(pathname),
+        m_exposed_memory(memory) { }
+
+    std::string
+    pathname() const {
+        return m_pathname;
+    }
+
+    exposed_memory
+    buffers() const {
+        return m_exposed_memory;
+    }
+
+private:
+    explicit send_file_args(const send_file_in_t& input) :
+        m_pathname(input.pathname),
+        m_exposed_memory(input.bulk_handle) { }
+
+    explicit operator send_file_in_t() {
+        return {m_pathname.c_str(), hg_bulk_t(m_exposed_memory)};
+    }
+
+    std::string m_pathname;
+    exposed_memory m_exposed_memory;
+};
+
+// return values associated to rpc::send_message
+class send_file_retval { };
+
+namespace detail {
+
+// specialization of rpc_descriptor for rpc::send_file
 template <>
 struct rpc_descriptor<rpc::send_file> : public rpc_descriptor_base {
 
@@ -418,20 +357,14 @@ struct rpc_descriptor<rpc::send_file> : public rpc_descriptor_base {
     using output_type = send_file_retval;
     using mercury_input_type = send_file_in_t;
     using mercury_output_type = send_file_out_t;
-
-
-    using input_arg_type = send_file_in_t;
-    using output_arg_type = send_file_out_t;
     using message_type = message::bulk;
     using executor = detail::executor<rpc::send_file, message_type>;
-    using requires_reply = std::true_type;
 
     rpc_descriptor() :
         rpc_descriptor_base(
             rpc::send_file,
             rpc_names[static_cast<int>(rpc::send_file)],
             static_cast<hg_id_t>(rpc::send_file),
-            //hg_hash_string(rpc_names[0]),
             HG_GEN_PROC_NAME(send_file_in_t),
             HG_GEN_PROC_NAME(send_file_out_t),
             rpc_handler<rpc::send_file, send_file_in_t>) {}
@@ -457,9 +390,112 @@ struct rpc_descriptor<rpc::send_file> : public rpc_descriptor_base {
     handler_type m_user_handler;
 };
 
+} // namespace detail
 
-/******************************************************************************/
-/** specialized rpc_info for rpc::send_buffer */
+
+//==============================================================================
+// definitions for rpc::send_buffer
+
+// Generate Mercury types and serialization functions.  (field names match
+// those defined by send_buffer_args and send_buffer_retval). These
+// definitions are internal and should not be used directly. Classes
+// send_buffer_args and send_buffer_retval are provided for public use.
+MERCURY_GEN_PROC(send_buffer_in_t,
+        ((hg_const_string_t) (pathname))
+        ((hg_bulk_t) (bulk_handle)))
+
+MERCURY_GEN_PROC(send_buffer_out_t,
+        ((int32_t) (retval)))
+
+// input arguments associated to rpc::send_buffer
+// TODO: provide a free conversion function rather than explicit conversion 
+// constructors
+class send_buffer_args {
+
+    //friend class detail::origin_context<rpc::send_buffer>;
+    friend struct detail::executor<rpc::send_buffer, message::bulk>;
+
+    template <
+        typename ExecutionContext, 
+        typename MercuryInput, 
+        typename MercuryOutput,
+        typename RpcOutput>
+    friend void
+    detail::forward(ExecutionContext* ctx,
+                    MercuryInput&& input);
+
+public:
+    send_buffer_args(const std::string& pathname,
+                     const exposed_memory& memory) :
+        m_pathname(pathname),
+        m_exposed_memory(memory) { }
+
+    std::string
+    pathname() const {
+        return m_pathname;
+    }
+
+    exposed_memory
+    buffers() const {
+        return m_exposed_memory;
+    }
+
+private:
+    explicit send_buffer_args(send_buffer_in_t input) :
+        m_pathname(input.pathname),
+        m_exposed_memory(input.bulk_handle) { }
+
+    explicit operator send_buffer_in_t() {
+        return {m_pathname.c_str(), hg_bulk_t(m_exposed_memory)};
+    }
+
+    std::string m_pathname;
+    exposed_memory m_exposed_memory;
+};
+
+// return values associated to rpc::send_buffer
+class send_buffer_retval {
+
+    friend class async_engine;
+
+    template <
+        typename ExecutionContext, 
+        typename MercuryInput, 
+        typename MercuryOutput,
+        typename RpcOutput>
+    friend void
+    detail::forward(ExecutionContext* ctx,
+                    MercuryInput&& input);
+
+public:
+    send_buffer_retval(int32_t retval) :
+        m_retval(retval) { }
+
+    int32_t
+    retval() const {
+        return m_retval;
+    }
+
+    void
+    set_retval(int32_t retval) {
+        m_retval = retval;
+    }
+
+private:
+    explicit send_buffer_retval(const send_buffer_out_t& out) {
+        m_retval = out.retval;
+    }
+
+    explicit operator send_buffer_out_t() {
+        return {m_retval};
+    }
+
+    int32_t m_retval;
+};
+
+namespace detail {
+
+// specialization of rpc_descriptor for rpc::send_buffer
 template <>
 struct rpc_descriptor<rpc::send_buffer> : public rpc_descriptor_base {
 
@@ -467,20 +503,14 @@ struct rpc_descriptor<rpc::send_buffer> : public rpc_descriptor_base {
     using output_type = send_buffer_retval;
     using mercury_input_type = send_buffer_in_t;
     using mercury_output_type = send_buffer_out_t;
-
-
-    using input_arg_type = send_buffer_in_t;
-    using output_arg_type = send_buffer_out_t;
     using message_type = message::bulk;
     using executor = detail::executor<rpc::send_buffer, message_type>;
-    using requires_reply = std::true_type;
 
     rpc_descriptor() :
         rpc_descriptor_base(
             rpc::send_buffer,
             rpc_names[static_cast<int>(rpc::send_buffer)],
             static_cast<hg_id_t>(rpc::send_buffer),
-            //hg_hash_string(rpc_names[0]),
             HG_GEN_PROC_NAME(send_buffer_in_t),
             HG_GEN_PROC_NAME(send_buffer_out_t),
             rpc_handler<rpc::send_buffer, send_buffer_in_t>) {}
@@ -506,63 +536,18 @@ struct rpc_descriptor<rpc::send_buffer> : public rpc_descriptor_base {
     handler_type m_user_handler;
 };
 
-
-#if 0 // disabled because we don't support void input types yet
-/******************************************************************************/
-/** specialized rpc_info for rpc::send_buffer */
-template <>
-struct rpc_descriptor<rpc::shutdown> : public rpc_descriptor_base {
-
-    using input_type = void;
-    using output_type = void;
-    using mercury_input_type = void;
-    using mercury_output_type = void;
+} // namespace detail
 
 
-//    using input_arg_type = send_buffer_in_t;
-//    using output_arg_type = send_buffer_out_t;
-    using message_type = message::simple;
-    using executor = detail::executor<rpc::shutdown, message_type>;
-
-    rpc_descriptor() :
-        rpc_descriptor_base(
-            rpc::shutdown,
-            rpc_names[static_cast<int>(rpc::shutdown)],
-            static_cast<hg_id_t>(rpc::shutdown),
-            //hg_hash_string(rpc_names[0]),
-            NULL,
-            NULL,
-            rpc_handler<rpc::shutdown, void>) {}
-
-    template <typename Callable>
-    void
-    set_user_handler(Callable&& handler) {
-        m_user_handler = std::forward<Callable>(handler);
-    }
-
-    template <typename Request, typename Input>
-    void
-    invoke_user_handler(Request&& req,
-                        Input&& args) {
-
-        if(!m_user_handler) {
-            throw std::runtime_error("User handler not set");
-        }
-
-        m_user_handler(std::forward<Request>(req), std::forward<Input>(args));
-    }
-
-    using handler_type = 
-        std::function<void(request&&)>;
-    handler_type m_user_handler;
-};
+#ifdef HG_GEN_PROC_NAME
+#undef HG_GEN_PROC_NAME
 #endif
 
 
 
 
 
-
+namespace detail {
 
 static const
 std::unordered_map<
@@ -588,15 +573,6 @@ std::unordered_map<
 
 } // namespace detail
 
-//TODO: remove in favor of local aliases
-//template <rpc ID>
-//using RpcInputArgTp = 
-//    typename detail::rpc_descriptor<ID>::input_arg_type;
-//
-//
-//template <rpc ID>
-//using RpcOutputArgTp = 
-//    typename detail::rpc_descriptor<ID>::output_arg_type;
 
 
 
@@ -616,9 +592,6 @@ template <rpc ID>
 using MercuryOutput = 
     typename detail::rpc_descriptor<ID>::mercury_output_type;
 
-#ifdef HG_GEN_PROC_NAME
-#undef HG_GEN_PROC_NAME
-#endif
 
 
 
