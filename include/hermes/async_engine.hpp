@@ -36,7 +36,6 @@
 
 namespace hermes {
 
-
 /** Valid transport types (i.e. transport types supported by Mercury) */
 enum class transport {
     bmi_tcp = 0, mpi_dynamic, mpi_static, na_sm, cci_tcp, cci_verbs, cci_gni,
@@ -300,11 +299,6 @@ struct executor<ID, message::simple> {
         hg_return_t ret = HG_Get_input(handle, &hg_input);
         assert(ret == HG_SUCCESS);
 
-        // register local target buffer for bulk access
-        const struct hg_info* hgi = HG_Get_info(handle);
-        assert(hgi);
-
-
         DEBUG2("Looking up RPC descriptor for [{}]", 
                rpc_names[static_cast<int>(ID)]);
 
@@ -314,9 +308,11 @@ struct executor<ID, message::simple> {
 
         RpcInput<ID> rpc_input = RpcInput<ID>(hg_input);
 
-        request req(handle);
+        // TODO: pass bulk_handle implicitly into rpc_input
+        request<RpcInput<ID>> req(handle, 
+                                  std::move(rpc_input));
 
-        rpc_desc->invoke_user_handler(std::move(req), rpc_input);
+        rpc_desc->invoke_user_handler(std::move(req));
 
         return HG_SUCCESS;
     }
@@ -365,28 +361,6 @@ struct executor<ID, message::bulk> {
         return HG_SUCCESS;
     }
 
-    template <typename ExecutionContext>
-    static hg_return_t
-    repost(ExecutionContext* ctx) {
-
-        DEBUG2("{}(ctx={})", __func__, fmt::ptr(ctx));
-
-        // convert the hermes RPC input to Mercury RPC input
-        // (this relies on the explicit conversion constructor defined for 
-        // the type)
-        auto&& hg_input = MercuryInput<ID>(ctx->m_input);
-
-        // send the RPC
-        detail::forward<ExecutionContext, 
-                        MercuryInput<ID>, 
-                        MercuryOutput<ID>,
-                        RpcOutput<ID>>(
-                                ctx, 
-                                std::forward<MercuryInput<ID>>(hg_input));
-
-        return HG_SUCCESS;
-    }
-
     static hg_return_t
     process(hg_handle_t handle) {
 
@@ -395,10 +369,6 @@ struct executor<ID, message::bulk> {
         // decode input
         hg_return_t ret = HG_Get_input(handle, &hg_input);
         assert(ret == HG_SUCCESS);
-
-        // register local target buffer for bulk access
-        const struct hg_info* hgi = HG_Get_info(handle);
-        assert(hgi);
 
         DEBUG2("Looking up RPC descriptor for [{}]", 
                rpc_names[static_cast<int>(ID)]);
@@ -409,9 +379,12 @@ struct executor<ID, message::bulk> {
 
         RpcInput<ID> rpc_input = RpcInput<ID>(hg_input);
 
-        request req(handle, hg_input.bulk_handle);
+        // TODO: pass bulk_handle implicitly into rpc_input
+        request<RpcInput<ID>> req(handle, 
+                                  hg_input.bulk_handle, 
+                                  std::move(rpc_input));
 
-        rpc_desc->invoke_user_handler(std::move(req), rpc_input);
+        rpc_desc->invoke_user_handler(std::move(req));
 
         return HG_SUCCESS;
     }
@@ -1110,8 +1083,8 @@ HG_Addr_free(m_hg_class, self_addr);
         }
     }
 
-    template <typename Callable>
-    void async_pull(request&& req,
+    template <typename Input, typename Callable>
+    void async_pull(request<Input>&& req,
                     const exposed_memory& dst, 
                     Callable&& user_callback) {
 
@@ -1143,11 +1116,11 @@ HG_Addr_free(m_hg_class, self_addr);
         // Once our callback is invoked, we can unpack the information, delete
         // the transfer_context and invoke the actual user callback
         struct transfer_context {
-            transfer_context(request&& req, Callable&& user_callback) :
+            transfer_context(request<Input>&& req, Callable&& user_callback) :
                 m_request(std::move(req)),
                 m_user_callback(std::move(user_callback)) { }
 
-            request&& m_request;
+            request<Input>&& m_request;
             Callable&& m_user_callback;
         };
 
@@ -1177,9 +1150,9 @@ HG_Addr_free(m_hg_class, self_addr);
         detail::bulk_transfer(std::move(req), ctx, completion_callback);
     }
 
-    template <rpc ID, typename... Args>
+    template <rpc ID, typename Input, typename... Args>
     void
-    respond(request&& req, 
+    respond(request<Input>&& req, 
             Args&&... args) const {
 
         RpcOutput<ID> out(std::forward<Args>(args)...);

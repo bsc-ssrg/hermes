@@ -6,15 +6,16 @@
 using hermes::request;
 using hermes::async_engine;
 using hermes::rpc;
+using hermes::send_file_args;
 using hermes::send_message_args;
 using hermes::send_buffer_args;
 
 void
-send_file_handler(request&& req, 
-                  const hermes::send_file_args& args) {
+send_file_handler(request<send_file_args>&& req) {
 
     (void) req;
-    (void) args;
+
+    send_file_args args = req.args();
 
     INFO("RPC [send_file] received");
 
@@ -33,10 +34,9 @@ struct example_class {
     const int m_retval = 36;
 
     void
-    send_message_handler(request&& req, 
-                         const send_message_args& args) {
+    send_message_handler(request<send_message_args>&& req) {
 
-        (void) req;
+        send_message_args args = req.args();
 
         INFO("RPC received:");
         INFO("    type: send_message,"); 
@@ -73,8 +73,9 @@ main(int argc, char* argv[]) {
         hermes::async_engine hg(hermes::transport::ofi_tcp, true);
 
         const auto send_buffer_handler = 
-            [&](hermes::request&& req,
-                const hermes::send_buffer_args& args) {
+            [&](hermes::request<send_buffer_args>&& req) {
+
+                send_buffer_args args =  req.args();
 
                 auto remote_buffers = args.buffers();
 
@@ -108,7 +109,7 @@ main(int argc, char* argv[]) {
                 // was actually copied into the buffers, but it's not necessary
                 // in real code)
                 const auto do_pull_completion = 
-                    [&bufvec, &hg](hermes::request&& req) {
+                    [&bufvec, &hg](hermes::request<send_buffer_args>&& req) {
 
                     INFO("    Pull successful!");
 
@@ -138,7 +139,7 @@ main(int argc, char* argv[]) {
 
         hg.register_handler<hermes::rpc::send_message>(
                 std::bind(&example_class::send_message_handler, 
-                          ex, std::placeholders::_1, std::placeholders::_2));
+                          ex, std::placeholders::_1));
 
         hg.run();
 

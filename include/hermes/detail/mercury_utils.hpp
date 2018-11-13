@@ -213,15 +213,15 @@ forward(ExecutionContext* ctx,
 
 
 
-template <typename ExecutionContext, typename Callable>
+template <typename Input, typename ExecutionContext, typename Callable>
 inline void
-bulk_transfer(request&& req,
+bulk_transfer(request<Input>&& req,
               ExecutionContext&& ctx,
               Callable&& completion_callback) {
 
     const struct hg_info* hgi = HG_Get_info(req.m_handle);
 
-    if(hgi == NULL) {
+    if(!hgi) {
         throw std::runtime_error("Failed to retrieve request information "
                                  "from internal handle");
     }
@@ -270,9 +270,9 @@ bulk_transfer(request&& req,
     }
 }
 
-template <typename Output>
+template <typename Input, typename Output>
 inline void
-respond(request&& req, Output&& out) {
+respond(request<Input>&& req, Output&& out) {
 
     // This is just a best effort response, we don't bother specifying
     // a callback here for completion

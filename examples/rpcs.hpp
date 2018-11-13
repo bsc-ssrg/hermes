@@ -19,6 +19,7 @@
 namespace hermes {
 
 // forward declarations
+template <typename RpcInput>
 class request;
 class mutable_buffer;
 
@@ -55,7 +56,7 @@ static const char* const rpc_names[] = {
 /** enum class hash (required for upcoming std::unordered_maps */
 struct enum_class_hash {
     template <typename T>
-    std::size_t operator()(T t) const {
+    std::size_t operator()(T t) const noexcept {
         return static_cast<std::size_t>(t);
     }
 };
@@ -392,20 +393,18 @@ struct rpc_descriptor<rpc::send_message> : public rpc_descriptor_base {
         m_user_handler = std::forward<Callable>(handler);
     }
 
-    template <typename Request, typename Input>
+    template <typename Request>
     void
-    invoke_user_handler(Request&& req,
-                        Input&& args) {
+    invoke_user_handler(Request&& req) {
 
         if(!m_user_handler) {
             throw std::runtime_error("User handler not set");
         }
 
-        m_user_handler(std::forward<Request>(req), std::forward<Input>(args));
+        m_user_handler(std::forward<Request>(req));
     }
 
-    using handler_type = 
-        std::function<void(request&&, const input_type&)>;
+    using handler_type = std::function<void(request<input_type>&&)>;
     handler_type m_user_handler;
 };
 
@@ -443,20 +442,18 @@ struct rpc_descriptor<rpc::send_file> : public rpc_descriptor_base {
         m_user_handler = std::forward<Callable>(handler);
     }
 
-    template <typename Request, typename Input>
+    template <typename Request>
     void
-    invoke_user_handler(Request&& req,
-                        Input&& args) {
+    invoke_user_handler(Request&& req) {
 
         if(!m_user_handler) {
             throw std::runtime_error("User handler not set");
         }
 
-        m_user_handler(std::forward<Request>(req), std::forward<Input>(args));
+        m_user_handler(std::forward<Request>(req));
     }
 
-    using handler_type = 
-        std::function<void(request&&, const input_type&)>;
+    using handler_type = std::function<void(request<input_type>&&)>;
     handler_type m_user_handler;
 };
 
@@ -494,20 +491,18 @@ struct rpc_descriptor<rpc::send_buffer> : public rpc_descriptor_base {
         m_user_handler = std::forward<Callable>(handler);
     }
 
-    template <typename Request, typename Input>
+    template <typename Request>
     void
-    invoke_user_handler(Request&& req,
-                        Input&& args) {
+    invoke_user_handler(Request&& req) {
 
         if(!m_user_handler) {
             throw std::runtime_error("User handler not set");
         }
 
-        m_user_handler(std::forward<Request>(req), std::forward<Input>(args));
+        m_user_handler(std::forward<Request>(req));
     }
 
-    using handler_type = 
-        std::function<void(request&&, const input_type&)>;
+    using handler_type = std::function<void(request<input_type>&&)>;
     handler_type m_user_handler;
 };
 
