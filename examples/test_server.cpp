@@ -83,24 +83,19 @@ main(int argc, char* argv[]) {
                 // 2. local_buffers = expose(bufs)
                 // 3. hermes::transfer(remote_buffers, local_buffers);
 
-                std::vector<hermes::mutable_buffer> bufvec;
-                bufvec.reserve(remote_buffers.count());
+                std::vector<hermes::mutable_buffer> local_buffers;
+                local_buffers.reserve(remote_buffers.count());
 
                 for(auto&& remote_buf : args.buffers()) {
                     std::size_t remote_size = remote_buf.size();
                     char* data = new char[remote_size];
-                    bufvec.emplace_back(data, remote_size);
+                    local_buffers.emplace_back(data, remote_size);
                 }
 
                 INFO("RPC received:");
                 INFO("    type: send_buffer,"); 
                 INFO("    args: remote_buffers{{count={}, total_size={}}}", 
                         remote_buffers.count(), remote_buffers.size());
-
-                // TODO: remove the need to expose local buffers and just pass
-                // the bufvec directly to async_pull
-                auto local_buffers = 
-                    hg.expose(bufvec, hermes::access_mode::write_only);
 
                 INFO("  Pulling remote buffers");
 
@@ -109,14 +104,15 @@ main(int argc, char* argv[]) {
                 // was actually copied into the buffers, but it's not necessary
                 // in real code)
                 const auto do_pull_completion = 
-                    [&bufvec, &hg](hermes::request<send_buffer_args>&& req) {
+                    [&local_buffers, &hg](
+                            hermes::request<send_buffer_args>&& req) {
 
                     INFO("    Pull successful!");
 
-                    for(auto&& local_buf : bufvec) {
-                        INFO("      Buffer size: {}", local_buf.size());
+                    for(auto&& buf : local_buffers) {
+                        INFO("      Buffer size: {}", buf.size());
                         INFO("      Buffer contents: {}", 
-                                reinterpret_cast<char*>(local_buf.data()));
+                                reinterpret_cast<char*>(buf.data()));
                     }
 
                     if(req.requires_response()) {
@@ -127,7 +123,7 @@ main(int argc, char* argv[]) {
                 };
 
                 hg.async_pull(std::move(req), 
-                              local_buffers, 
+                              local_buffers,
                               do_pull_completion);
             };
 

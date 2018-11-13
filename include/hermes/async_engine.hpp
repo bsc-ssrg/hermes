@@ -971,7 +971,8 @@ HG_Addr_free(m_hg_class, self_addr);
 
     template <typename BufferSequence>
     exposed_memory
-    expose(BufferSequence&& bufseq, access_mode mode) {
+    expose(BufferSequence&& bufseq, 
+           access_mode mode) {
 
         assert(m_hg_context);
         assert(m_hg_class);
@@ -1083,11 +1084,16 @@ HG_Addr_free(m_hg_class, self_addr);
         }
     }
 
-    template <typename Input, typename Callable>
+    template <typename Input, typename BufferSequence, typename Callable>
     void async_pull(request<Input>&& req,
-                    const exposed_memory& dst, 
+                    BufferSequence&& bufseq, 
                     Callable&& user_callback) {
 
+        // expose the local buffers provided by the user so that we
+        // can use them for RMA transfers
+        auto dst = expose(bufseq, hermes::access_mode::write_only);
+
+        // TODO: consider encapsulating this into a helper in mercury_utils
         void** buf_ptrs = reinterpret_cast<void**>(
                 ::alloca(dst.m_buffers.size() * sizeof(void*)));
         hg_size_t* buf_sizes = reinterpret_cast<hg_size_t*>(

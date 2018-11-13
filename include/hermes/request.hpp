@@ -40,21 +40,25 @@ class request {
 // TODO: move this 'public' after ctors
 public:
 
+    template <typename RpcInput, 
+              typename Enable = typename std::is_same<Input, RpcInput>::type>
     request(hg_handle_t handle, 
-            Input&& args,
+            RpcInput&& args,
             bool requires_response = true) :
         m_handle(handle),
-        m_args(std::forward<Input>(args)),
+        m_args(std::forward<RpcInput>(args)),
         m_requires_response(requires_response),
         m_remote_bulk_handle(HG_BULK_NULL),
         m_local_bulk_handle(HG_BULK_NULL) { }
 
+    template <typename RpcInput, 
+              typename Enable = typename std::is_same<Input, RpcInput>::type>
     request(hg_handle_t handle, 
             hg_bulk_t remote_bulk_handle, 
-            Input&& args,
+            RpcInput&& args,
             bool requires_response = true) :
         m_handle(handle),
-        m_args(std::forward<Input>(args)),
+        m_args(std::forward<RpcInput>(args)),
         m_requires_response(requires_response),
         m_remote_bulk_handle(remote_bulk_handle),
         m_local_bulk_handle(HG_BULK_NULL) { }
