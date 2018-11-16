@@ -16,9 +16,14 @@
 #include <hermes/exposed_memory.hpp>
 #include <hermes/messages.hpp>
 
+
+
 namespace hermes {
 
 // forward declarations
+template <typename Request>
+class rpc_handle_v2;
+
 template <typename RpcInput>
 class request;
 
@@ -90,10 +95,6 @@ template <rpc ID, typename MessageTp> struct executor;
 
 
 
-
-
-
-
 namespace detail {
 
 // TODO: rename to rpc_info_base
@@ -138,8 +139,153 @@ rpc_handler(hg_handle_t handle);
 template <rpc>
 struct rpc_descriptor : public rpc_descriptor_base {};
 
+template <typename RPC>
+struct rpc_descriptor_v2 : public rpc_descriptor_base {};
+
+
 } // namespace detail
 
+
+
+
+} //XXX namespace hermes
+
+
+namespace hermes {
+namespace detail {
+
+//==============================================================================
+// definitions for rpc::send_message
+
+// Generate Mercury types and serialization functions.  (field names match
+// those defined by send_message_args and send_message_retval). These
+// definitions are internal and should not be used directly. Classes
+// send_message_args and send_message_retval are provided for public use.
+MERCURY_GEN_PROC(send_message_v2_in_t,
+        ((hg_const_string_t) (message)))
+
+MERCURY_GEN_PROC(send_message_v2_out_t,
+        ((int32_t) (retval)))
+
+} // namespace detail
+} // namespace hermes
+
+
+namespace hermes {
+namespace detail {
+
+// required by conversion operators
+template <typename Request>
+struct executor_v2;
+
+template <typename ExecutionContext>
+hg_return_t post_to_mercury(ExecutionContext*);
+
+} // namespace detail
+} // namespace hermes
+
+// XXX new RPC definitions
+namespace my_example_rpcs {
+
+struct send_message_v2 {
+
+    // forward declarations of public input/output types for this RPC
+    class input;
+    class output;
+
+    // RPC public identifier
+    constexpr static const int public_id = 42;
+    // RPC internal Mercury identifier
+    constexpr static const int mercury_id = public_id;
+
+    // traits used so that the engine knows what to do with the RPC
+    using self_type = send_message_v2;
+    using input_type = input;
+    using output_type = output;
+    using mercury_input_type = hermes::detail::send_message_v2_in_t;
+    using mercury_output_type = hermes::detail::send_message_v2_out_t;
+
+    using handle_type = ::hermes::rpc_handle_v2<self_type>;
+    using has_buffers = std::false_type;
+
+    class input {
+
+        template <typename ExecutionContext>
+        friend hg_return_t hermes::detail::post_to_mercury(ExecutionContext*);
+
+    public:
+        input(const std::string& message) :
+            m_message(message) { }
+
+        std::string
+        message() const {
+            return m_message;
+        }
+
+//    private: XXX temporarily disabled
+        explicit input(hermes::detail::send_message_v2_in_t input) :
+            m_message(input.message) { }
+
+        explicit operator hermes::detail::send_message_v2_in_t() {
+            return {m_message.c_str()};
+        }
+
+        std::string m_message;
+    };
+
+    class output {
+
+        template <typename ExecutionContext>
+        friend hg_return_t hermes::detail::post_to_mercury(ExecutionContext*);
+
+    public:
+        output(int32_t retval) :
+            m_retval(retval) { }
+
+        int32_t
+        retval() const {
+            return m_retval;
+        }
+
+        void
+        set_retval(int32_t retval) {
+            m_retval = retval;
+        }
+
+//    private: XXX temporarily disabled
+        explicit output(const hermes::detail::send_message_v2_out_t& out) {
+            m_retval = out.retval;
+        }
+
+        explicit operator hermes::detail::send_message_v2_out_t() {
+            return {m_retval};
+        }
+
+        int32_t m_retval;
+    };
+};
+
+} // namespace my_example_rpcs
+
+namespace hermes {
+namespace detail {
+
+hermes::detail::send_message_v2_in_t
+convert(const my_example_rpcs::send_message_v2::input& other) {
+    return {other.m_message.c_str()};
+}
+
+my_example_rpcs::send_message_v2::input
+convert(const hermes::detail::send_message_v2_in_t& other) {
+    return {other.message};
+}
+
+}
+}
+
+
+
+namespace hermes {
 
 
 

@@ -15,6 +15,10 @@ if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
   message(STATUS "CMake version: ${CMAKE_VERSION}")
 endif ()
 
+if (NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 11)
+endif()
+
 ### # Joins arguments and places the results in ${result_var}.
 ### function(join result_var)
 ###   set(result )
@@ -84,7 +88,7 @@ if (HERMES_LOGGING)
   find_package(fmt 5.0)
   
   if(fmt_FOUND)
-    target_compile_definitions(hermes INTERFACE HAVE_FMT=1)
+    target_compile_definitions(hermes INTERFACE HAVE_FMT=1 HERMES_DEBUG=1)
     target_link_libraries(hermes INTERFACE fmt)
   else()
     target_compile_definitions(hermes INTERFACE HAVE_FMT=0)

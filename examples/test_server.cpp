@@ -1,15 +1,18 @@
 #include <unistd.h>
 
-#include "rpcs.hpp"
 #include <hermes.hpp>
+#include "rpcs.v2.hpp"
 
+#if 0
 using hermes::request;
 using hermes::async_engine;
 using hermes::rpc;
 using hermes::send_file_args;
 using hermes::send_message_args;
 using hermes::send_buffer_args;
+#endif
 
+#if 0
 void
 send_file_handler(request<send_file_args>&& req) {
 
@@ -25,18 +28,19 @@ send_file_handler(request<send_file_args>&& req) {
     INFO("Callback invoked: {}(\"{}\") = {}!", 
          __FUNCTION__, args.pathname(), "?");
 }
+#endif
 
 struct example_class {
 
-    example_class(const async_engine& hg) :
+    example_class(const hermes::async_engine& hg) :
         m_hg(hg) { }
 
     const int m_retval = 36;
 
     void
-    send_message_handler(request<send_message_args>&& req) {
+    handler(hermes::request<example_rpcs::send_message>&& req) {
 
-        send_message_args args = req.args();
+        example_rpcs::send_message::input args = req.args();
 
         INFO("RPC received:");
         INFO("    type: send_message,"); 
@@ -53,12 +57,12 @@ struct example_class {
              *                  std::move(req), 
              *                  hermes::send_message_retval{42});
              ******************************************************************/
-            m_hg.respond<rpc::send_message>(std::move(req), 0);
+            m_hg.respond<example_rpcs::send_message>(std::move(req), 0);
             INFO("  Response sent with value {}", 0);
         }
     }
 
-    const async_engine& m_hg;
+    const hermes::async_engine& m_hg;
 };
 
 int
@@ -70,12 +74,13 @@ main(int argc, char* argv[]) {
     (void) argv;
 
     try {
-        hermes::async_engine hg(hermes::transport::ofi_tcp, true);
+        async_engine hg(hermes::transport::ofi_tcp, true);
 
+#if 0
         const auto send_buffer_handler = 
             [&](hermes::request<send_buffer_args>&& req) {
 
-                send_buffer_args args =  req.args();
+                send_buffer_args args = req.args();
 
                 auto remote_buffers = args.buffers();
 
@@ -130,11 +135,12 @@ main(int argc, char* argv[]) {
         hg.register_handler<hermes::rpc::send_buffer>(send_buffer_handler);
 
         hg.register_handler<hermes::rpc::send_file>(send_file_handler);
+#endif
 
         example_class ex(hg);
 
-        hg.register_handler<hermes::rpc::send_message>(
-                std::bind(&example_class::send_message_handler, 
+        hg.register_handler<example_rpcs::send_message>(
+                std::bind(&example_class::handler, 
                           ex, std::placeholders::_1));
 
         hg.run();

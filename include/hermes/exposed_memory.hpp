@@ -4,6 +4,7 @@
 
 // C includes
 #include <mercury.h>
+#include <mercury_bulk.h>
 #include <alloca.h>
 
 // C++ includes

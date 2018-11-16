@@ -1,6 +1,8 @@
 #ifndef __HERMES_BUFFER_HPP__
 #define __HERMES_BUFFER_HPP__
 
+#include <cstddef>
+
 namespace hermes {
 
 /**

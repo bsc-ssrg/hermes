@@ -8,6 +8,12 @@
 namespace hermes {
 
 // forward declarations
+
+// defined in this file
+template <typename Input>
+class request;
+
+// defined elsewhere
 namespace detail {
 
 template <typename Input, typename ExecutionContext, typename Callable>
@@ -22,43 +28,50 @@ respond(request<Input>&& req, Output&& out);
 
 }
 
-template <typename Input>
+template <typename Request>
 class request {
 
     friend class async_engine;
 
-    template <typename RpcInput, typename ExecutionContext, typename Callable>
+    using Input = typename Request::input_type;
+
+    template <typename RequestInput, 
+              typename ExecutionContext, 
+              typename Callable>
     friend void
-    detail::bulk_transfer(hermes::request<RpcInput>&& req,
+    detail::bulk_transfer(hermes::request<RequestInput>&& req,
                           ExecutionContext&& ctx,
                           Callable&& completion_callback);
 
-    template <typename RpcInput, typename Output>
+    template <typename RequestInput, 
+              typename Output>
     friend void
-    detail::respond(request<RpcInput>&& req, Output&& out);
+    detail::respond(request<RequestInput>&& req, Output&& out);
 
 // TODO: move this 'public' after ctors
 public:
 
-    template <typename RpcInput, 
-              typename Enable = typename std::is_same<Input, RpcInput>::type>
+    template <typename RequestInput, 
+              typename Enable = 
+                  typename std::is_same<Input, RequestInput>::type>
     request(hg_handle_t handle, 
-            RpcInput&& args,
+            RequestInput&& args,
             bool requires_response = true) :
         m_handle(handle),
-        m_args(std::forward<RpcInput>(args)),
+        m_args(std::forward<RequestInput>(args)),
         m_requires_response(requires_response),
         m_remote_bulk_handle(HG_BULK_NULL),
         m_local_bulk_handle(HG_BULK_NULL) { }
 
-    template <typename RpcInput, 
-              typename Enable = typename std::is_same<Input, RpcInput>::type>
+    template <typename RequestInput, 
+              typename Enable = 
+                  typename std::is_same<Input, RequestInput>::type>
     request(hg_handle_t handle, 
             hg_bulk_t remote_bulk_handle, 
-            RpcInput&& args,
+            RequestInput&& args,
             bool requires_response = true) :
         m_handle(handle),
-        m_args(std::forward<RpcInput>(args)),
+        m_args(std::forward<RequestInput>(args)),
         m_requires_response(requires_response),
         m_remote_bulk_handle(remote_bulk_handle),
         m_local_bulk_handle(HG_BULK_NULL) { }
@@ -93,6 +106,8 @@ private:
 
 
 };
+
+
 
 } // namespace hermes
 

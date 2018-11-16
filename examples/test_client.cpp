@@ -4,9 +4,11 @@
 #include <unistd.h>
 #include <sys/mman.h>
 
-#include "rpcs.hpp"
+//#include "rpcs.hpp"
 #include <hermes.hpp>
+#include "rpcs.v2.hpp"
 
+#if 0
 struct mapped_buffer {
 
     explicit mapped_buffer(const std::string& pathname) {
@@ -54,6 +56,7 @@ struct mapped_buffer {
     void* m_data;
     std::size_t m_size;
 };
+#endif
 
 
 int
@@ -65,10 +68,10 @@ main(int argc, char* argv[]) {
     using hermes::transport;
     using hermes::async_engine;
     using hermes::endpoint_set;
-    using hermes::result_set;
-    using hermes::rpc;
+    using hermes::output_set;
+    //using hermes::rpc;
     using hermes::access_mode;
-    using hermes::send_buffer_args;
+    //using hermes::send_buffer_args;
 
     try {
 
@@ -90,20 +93,23 @@ main(int argc, char* argv[]) {
          **********************************************************************/
         const std::string message("Hello world!!!");
 
-        INFO("Sending RPC [send_message, args: \"{}\"]", message);
+        INFO("Sending RPC (send_message, args: \"{}\")", message);
 
-        auto rpc1 = 
-            hg.post<rpc::send_message>(endps, message);
+//        auto rpc1 = 
+//            hg.post<rpc::send_message>(endps, message);
+
+        auto rpc1 = hg.broadcast<example_rpcs::send_message>(endps, message);
 
         // wait for results
-        result_set<rpc::send_message> results = rpc1.get();
+        hermes::output_set<example_rpcs::send_message> results = rpc1.get();
 
-        INFO("All results received [size: {}]", results.size());
+        INFO("Output received (size: {})", results.size());
 
         for(auto&& rv : results) {
             INFO("retval: {}", rv.retval());
         }
 
+#if 0
         /*********************************************************************** 
          * Example 2: posting an RPC with arbitrary arguments plus an 
          * additional transfer of associated buffers 
@@ -148,6 +154,7 @@ main(int argc, char* argv[]) {
         for(auto&& rv : results2a) {
             INFO("{}", rv.retval());
         }
+#endif
     } 
     catch(const std::exception& ex) {
         ERROR("{}\n", ex.what());
