@@ -1,13 +1,30 @@
 #ifndef __HERMES_REQUEST_DESCRIPTOR_HPP__
 #define __HERMES_REQUEST_DESCRIPTOR_HPP__
 
+// C includes
+#include <mercury.h>
+
+// C++ includes
+#include <functional>
+
 namespace hermes {
 
-// forward declarations
+// defined in this file
+class request_descriptor_base;
+
+template <typename Request>
+struct request_descriptor;
+
+// defined elsewhere
+template <typename Request>
+class request;
+
+// defined elsewhere
 class async_engine;
 
 namespace detail {
 
+// defined elsewhere
 template <typename Request>
 static inline hg_return_t
 mercury_handler(hg_handle_t handle);

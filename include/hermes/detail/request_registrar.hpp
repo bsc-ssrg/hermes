@@ -21,6 +21,15 @@ public:
 
     static request_registrar<Key, Value>& 
     singleton() {
+
+#ifdef HERMES_DEBUG
+        char* v = getenv("HERMES_LOG_LEVEL");
+
+        if(v != NULL) {
+            logging::set_debug_output_level(std::stoul(v));
+        }
+#endif
+
         static request_registrar<Key, Value> instance;
         return instance;
     }
@@ -34,10 +43,18 @@ public:
         constexpr const auto mercury_in_proc_cb = Request::mercury_in_proc_cb;
         constexpr const auto mercury_out_proc_cb = Request::mercury_out_proc_cb;
 
+        DEBUG2("Adding new request type (id={}, name={})", id, name);
+
+        if(m_request_types.count(id) != 0) {
+            throw std::runtime_error("Failed to add request type: duplicate id");
+        }
+
         m_request_types.emplace(id, 
                 std::make_shared<request_descriptor<Request>>(
                     id, mercury_id, name, mercury_in_proc_cb, 
                     mercury_out_proc_cb, nullptr));
+
+        return true;
     }
 
     std::shared_ptr<request_descriptor_base>

@@ -15,6 +15,7 @@ if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
   message(STATUS "CMake version: ${CMAKE_VERSION}")
 endif ()
 
+
 if (NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 11)
 endif()
@@ -57,9 +58,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
+  "${CMAKE_SOURCE_DIR}/externals/sanitizers-cmake/cmake")
+
 # Export compilation database
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+include(hermes_env)
 include(hermes_flags)
 
 add_library(hermes INTERFACE)
@@ -82,6 +87,7 @@ if(HERMES_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
+# 
 find_package(Mercury REQUIRED)
 
 if (HERMES_LOGGING)
@@ -106,3 +112,5 @@ set_property(CACHE RPC_PROTOCOL PROPERTY STRINGS
 message(STATUS "RPC protocol: '${RPC_PROTOCOL}'")
 
 target_link_libraries(hermes INTERFACE mercury)
+
+find_package(Sanitizers)

@@ -1,7 +1,15 @@
 #ifndef __HERMES_BUFFER_HPP__
 #define __HERMES_BUFFER_HPP__
 
+// C includes
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <string.h>
+
+// C++ includes
 #include <cstddef>
+#include <stdexcept>
 
 namespace hermes {
 
@@ -48,11 +56,88 @@ public:
         return m_size;
     }
 
-    /** */
-    void
-    reset(void* data, std::size_t size) {
-        m_data = data;
-        m_size = size;
+private:
+    void* m_data;
+    std::size_t m_size;
+};
+
+
+// TODO
+class mapped_buffer {
+
+public:
+    explicit mapped_buffer(const std::string& pathname) {
+
+        const auto build_error_msg = [](const std::string& msg) {
+            // 1024 should be more than enough for most locales
+            char buffer[1024];
+            return msg + ": " +
+                std::string(::strerror_r(errno, buffer, sizeof(buffer)));
+        };
+
+        int fd = ::open(pathname.c_str(), O_RDONLY);
+
+        if(fd == -1) {
+            throw std::runtime_error(
+                    build_error_msg("Failed to open file"));
+        }
+
+        struct stat stbuf;
+
+        if(::fstat(fd, &stbuf) != 0) {
+            throw std::runtime_error(
+                    build_error_msg("Failed to retrieve file size"));
+        }
+
+        m_size = stbuf.st_size;
+
+        int flags = MAP_SHARED;
+
+#ifdef MAP_HUGETLB
+        flags |= MAP_HUGETLB;
+#endif
+
+        m_data = ::mmap(NULL, stbuf.st_size, PROT_READ, flags, fd, 0);
+
+        if(m_data == MAP_FAILED) {
+#ifdef MAP_HUGETLB
+            // the system may not have huge pages configured, or we may have 
+            // exhausted them, retry with normal-size pages
+            flags &= ~(MAP_HUGETLB);
+            m_data = ::mmap(NULL, stbuf.st_size, PROT_READ, flags, fd, 0);
+
+            if(m_data == MAP_FAILED) {
+#endif
+                throw std::runtime_error(
+                        build_error_msg("mmap() on file failed"));
+#ifdef MAP_HUGETLB
+            }
+#endif
+        }
+
+        if(::close(fd) != 0) {
+            throw std::runtime_error(
+                    build_error_msg("close() on file failed"));
+        }
+    }
+
+    ~mapped_buffer() {
+        if(m_data != NULL) {
+            // don't bother checking the error since we can't report it
+            ::munmap(m_data, m_size);
+        }
+    }
+
+    /** Returns a pointer to the beginning of the memory region */
+    void*
+    data() const {
+        return m_data;
+    }
+
+    /** Returns the size of the memory region */
+    std::size_t
+    size() const {
+        return m_size;
     }
 
 private:

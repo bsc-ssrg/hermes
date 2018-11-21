@@ -148,6 +148,12 @@ struct execution_context_v2 {
         m_bulk_handle(HG_BULK_NULL),
         m_status(detail::request_status::created),
         m_address(address),
+        // the context takes ownership of the user's input in order to ensure
+        // that any pointers in m_mercury_input that refer back to it (e.g. 
+        // strings) survives as long as needed (this is required because
+        // mercury does not take ownership of any pointers in the user input)
+        m_user_input(input),
+        // invoke explicit cast constructor
         m_mercury_input(input) { }
 
     Handle* m_parent;
@@ -157,6 +163,7 @@ struct execution_context_v2 {
     std::atomic<detail::request_status> m_status;
 
     const std::shared_ptr<detail::address> m_address;
+    Input m_user_input;
     MercuryInput m_mercury_input;
 
     std::promise<Output> m_output_promise;
@@ -948,13 +955,6 @@ public:
             }()) {
 
 
-#ifdef HERMES_DEBUG
-        char* v = getenv("HERMES_LOG_LEVEL");
-
-        if(v != NULL) {
-            logging::set_debug_output_level(std::stoul(v));
-        }
-#endif
 
         DEBUG("Initializing Mercury asynchronous engine");
 
@@ -987,16 +987,16 @@ public:
 
 HG_Addr_free(m_hg_class, self_addr);
 
-        auto text_address = new char[buf_size];
+        auto text_address = std::make_unique<char[]>(buf_size);
 
-        ret = HG_Addr_to_string(m_hg_class, text_address, &buf_size, self_addr);
+        ret = HG_Addr_to_string(m_hg_class, text_address.get(), &buf_size, self_addr);
 
         if(ret != HG_SUCCESS) {
             throw std::runtime_error("Failed to compute address length " +
                                      std::string(HG_Error_to_string(ret)));
         }
 
-        INFO("Self address: {}", text_address);
+        INFO("Self address: {}", text_address.get());
 
         DEBUG2("    m_hg_class: {}", static_cast<void*>(m_hg_class));
 
@@ -1392,34 +1392,17 @@ HG_Addr_free(m_hg_class, self_addr);
     }
 #endif
 
-    template <typename Input, typename BufferSequence, typename Callable>
-    void async_pull(request<Input>&& req,
-                    BufferSequence&& bufseq, 
+    template <typename Input, typename Callable>
+    void async_pull(exposed_memory&& src,
+                    exposed_memory&& dst,
+                    request<Input>&& req,
                     Callable&& user_callback) {
 
-        // expose the local buffers provided by the user so that we
-        // can use them for RMA transfers
-        auto dst = expose(bufseq, hermes::access_mode::write_only);
+        hg_bulk_t local_bulk_handle = hg_bulk_t(dst);
+        hg_bulk_t remote_bulk_handle = hg_bulk_t(src);
 
-        // TODO: consider encapsulating this into a helper in mercury_utils
-        void** buf_ptrs = reinterpret_cast<void**>(
-                ::alloca(dst.m_buffers.size() * sizeof(void*)));
-        hg_size_t* buf_sizes = reinterpret_cast<hg_size_t*>(
-                ::alloca(dst.m_buffers.size() * sizeof(hg_size_t)));
-
-        std::size_t i = 0;
-        for(auto&& buf : dst.m_buffers) {
-            buf_ptrs[i] = buf.data();
-            buf_sizes[i] = buf.size();
-            ++i;
-        }
-
-        // create a local bulk handle for the transfer of buffers
-        req.m_local_bulk_handle = detail::create_bulk_handle(
-                    const_cast<hg_class_t*>(dst.m_hg_class),
-                    i, buf_ptrs, buf_sizes, HG_BULK_WRITE_ONLY);
-
-        assert(req.m_local_bulk_handle != HG_BULK_NULL);
+        assert(local_bulk_handle != HG_BULK_NULL);
+        assert(remote_bulk_handle != HG_BULK_NULL);
 
         // We need to allow custom user callbacks, but the Mercury API 
         // restricts us in the prototypes that we can use. Since we don't
@@ -1430,17 +1413,37 @@ HG_Addr_free(m_hg_class, self_addr);
         // Once our callback is invoked, we can unpack the information, delete
         // the transfer_context and invoke the actual user callback
         struct transfer_context {
-            transfer_context(request<Input>&& req, Callable&& user_callback) :
+            transfer_context(request<Input>&& req, 
+                             exposed_memory&& src, 
+                             exposed_memory&& dst,
+                             Callable&& user_callback) :
                 m_request(std::move(req)),
-                m_user_callback(std::move(user_callback)) { }
+                m_src(src),
+                m_dst(dst),
+                m_user_callback(user_callback) { }
 
-            request<Input>&& m_request;
-            Callable&& m_user_callback;
+            ~transfer_context() {
+                DEBUG("{}()", __func__);
+            }
+
+            request<Input> m_request;
+            exposed_memory m_src;
+            exposed_memory m_dst;
+            // XXX For some reason, declaring m_user_callback as:
+            //    Callable m_user_callback;
+            // causes a weird bug with GCC 4.9 where any variables captured 
+            // by value in the value get corrupted. Replacing it with 
+            // std::function fixes this
+            std::function<void(request<Input>&&)> m_user_callback;
         };
 
-        const auto ctx =
+INFO("===== req.m_handle: {}", fmt::ptr(req.m_handle));
+
+        auto* ctx =
             new transfer_context(std::move(req), 
-                                 std::forward<Callable>(user_callback));
+                                 std::move(src),
+                                 std::move(dst),
+                                 user_callback);
 
         const auto completion_callback =
                 [](const struct hg_cb_info* cbi) -> hg_return_t {
@@ -1456,12 +1459,17 @@ HG_Addr_free(m_hg_class, self_addr);
                         std::unique_ptr<transfer_context>(
                                 reinterpret_cast<transfer_context*>(cbi->arg));
 
+INFO("===== req.m_handle: {}", fmt::ptr(ctx->m_request.m_handle));
                     ctx->m_user_callback(std::move(ctx->m_request));
 
                     return HG_SUCCESS;
                 };
 
-        detail::bulk_transfer(std::move(req), ctx, completion_callback);
+        detail::mercury_bulk_transfer(ctx->m_request.m_handle,
+                                      remote_bulk_handle, 
+                                      local_bulk_handle, 
+                                      ctx,
+                                      completion_callback);
     }
 
     template <typename Request, typename... Args>
@@ -1472,9 +1480,10 @@ HG_Addr_free(m_hg_class, self_addr);
         using output_type = typename Request::output_type;
         using mercury_output_type = typename Request::mercury_output_type;
 
-        detail::respond(std::move(req), 
-                        mercury_output_type(
-                            output_type(std::forward<Args>(args)...)));
+        detail::mercury_respond(
+                std::move(req), 
+                mercury_output_type(
+                    output_type(std::forward<Args>(args)...)));
     }
 
 private:
@@ -1533,7 +1542,7 @@ private:
                                  1,
                                  &actual_count);
 
-                DEBUG3("HG_Trigger(context={}, timeout={}, max_count={}, "
+                DEBUG4("HG_Trigger(context={}, timeout={}, max_count={}, "
                        "actual_count={}) = {}", fmt::ptr(m_hg_context), 0, 1,
                        actual_count, HG_Error_to_string(ret));
 
@@ -1544,7 +1553,7 @@ private:
             if(!m_shutdown) {
                 ret = HG_Progress(m_hg_context, 100);
 
-                DEBUG3("HG_Progress(context={}, timeout={}) = {}", 
+                DEBUG4("HG_Progress(context={}, timeout={}) = {}", 
                        fmt::ptr(m_hg_context), 100, HG_Error_to_string(ret));
 
                 if(ret != HG_SUCCESS && ret != HG_TIMEOUT) {

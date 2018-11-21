@@ -42,6 +42,8 @@ set_debug_output_level(unsigned int level) {
 #define DEBUG3(...) \
     DEBUG_HELPER(3u, __VA_ARGS__);
 
+#define DEBUG4(...) \
+    DEBUG_HELPER(4u, __VA_ARGS__);
 
 #define DEBUG_HELPER(level, ...)                                            \
     do {                                                                    \
@@ -65,6 +67,9 @@ set_debug_output_level(unsigned int level) {
 
 
 #define DEBUG3(...)     \
+    DEBUG(__VA_ARGS__)
+
+#define DEBUG4(...)     \
     DEBUG(__VA_ARGS__)
 
 #endif

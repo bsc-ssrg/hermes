@@ -1,4 +1,6 @@
+#include <vector>
 #include <unistd.h>
+#include <iostream>
 
 #include <hermes.hpp>
 #include "rpcs.v2.hpp"
@@ -12,23 +14,28 @@ using hermes::send_message_args;
 using hermes::send_buffer_args;
 #endif
 
-#if 0
 void
-send_file_handler(request<send_file_args>&& req) {
+send_file_handler(hermes::request<example_rpcs::send_file>&& req) {
 
-    (void) req;
+    example_rpcs::send_file::input args = req.args();
 
-    send_file_args args = req.args();
-
-    INFO("RPC [send_file] received");
+    INFO("RPC received:");
+    INFO("    type: send_message,"); 
+    INFO("    args: \"{}\"", args.pathname());
 
     // hermes::send_file_out_t out;
     // out.ret_val = 42;
 
     INFO("Callback invoked: {}(\"{}\") = {}!", 
          __FUNCTION__, args.pathname(), "?");
-}
+
+#if 0
+    if(req.requires_response()) {
+        m_hg.respond<example_rpcs::send_file>(std::move(req), 0);
+        INFO("  Response sent with value {}", 0);
+    }
 #endif
+}
 
 struct example_class {
 
@@ -76,31 +83,32 @@ main(int argc, char* argv[]) {
     try {
         async_engine hg(hermes::transport::ofi_tcp, true);
 
-#if 0
         const auto send_buffer_handler = 
-            [&](hermes::request<send_buffer_args>&& req) {
+            [&](hermes::request<example_rpcs::send_buffer>&& req) {
 
-                send_buffer_args args = req.args();
+INFO("===== req.m_handle: {}", fmt::ptr(req.m_handle));
 
-                auto remote_buffers = args.buffers();
+                example_rpcs::send_buffer::input args = req.args();
 
-                // 1. allocate local buffers according to info in remote_buffers
-                // 2. local_buffers = expose(bufs)
-                // 3. hermes::transfer(remote_buffers, local_buffers);
-
-                std::vector<hermes::mutable_buffer> local_buffers;
-                local_buffers.reserve(remote_buffers.count());
-
-                for(auto&& remote_buf : args.buffers()) {
-                    std::size_t remote_size = remote_buf.size();
-                    char* data = new char[remote_size];
-                    local_buffers.emplace_back(data, remote_size);
-                }
+                hermes::exposed_memory remote_buffers = args.buffers();
 
                 INFO("RPC received:");
                 INFO("    type: send_buffer,"); 
                 INFO("    args: remote_buffers{{count={}, total_size={}}}", 
                         remote_buffers.count(), remote_buffers.size());
+
+                // let's prepare some local buffers
+                std::vector<hermes::mutable_buffer> bufseq;
+                bufseq.reserve(remote_buffers.count());
+
+                for(auto&& rbuf : remote_buffers) {
+                    std::size_t remote_size = rbuf.size();
+                    char* data = new char[remote_size];
+                    bufseq.emplace_back(data, remote_size);
+                }
+
+                hermes::exposed_memory local_buffers =
+                    hg.expose(bufseq, hermes::access_mode::write_only);
 
                 INFO("  Pulling remote buffers");
 
@@ -108,34 +116,40 @@ main(int argc, char* argv[]) {
                 // (we capture bufvec by reference to verify that remote data
                 // was actually copied into the buffers, but it's not necessary
                 // in real code)
-                const auto do_pull_completion = 
-                    [&local_buffers, &hg](
-                            hermes::request<send_buffer_args>&& req) {
+                const auto do_pull_completion = [bufseq, &hg](
+                        hermes::request<example_rpcs::send_buffer>&& req) {
+
+INFO("===== req.m_handle: {}", fmt::ptr(req.m_handle));
 
                     INFO("    Pull successful!");
 
-                    for(auto&& buf : local_buffers) {
+                    for(auto&& buf : bufseq) {
                         INFO("      Buffer size: {}", buf.size());
-                        INFO("      Buffer contents: {}", 
-                                reinterpret_cast<char*>(buf.data()));
+                        // INFO("      Buffer contents: {}", 
+                        //         reinterpret_cast<char*>(buf.data()));
+                        INFO("      Initial buffer contents: \"{}\"", 
+                                std::string(reinterpret_cast<char*>(buf.data()), 50));
                     }
 
                     if(req.requires_response()) {
-                        hermes::send_buffer_retval rv(42);
-                        hg.respond<hermes::rpc::send_buffer>(std::move(req), rv);
+                        INFO("  Sending response...");
+                        example_rpcs::send_buffer::output rv(42);
+                        hg.respond<example_rpcs::send_buffer>(std::move(req), rv);
                         INFO("  Response sent with value {}", rv.retval());
                     }
                 };
 
-                hg.async_pull(std::move(req), 
-                              local_buffers,
+INFO("===== req.m_handle: {}", fmt::ptr(req.m_handle));
+
+                hg.async_pull(std::move(remote_buffers),
+                              std::move(local_buffers),
+                              std::move(req),
                               do_pull_completion);
             };
 
-        hg.register_handler<hermes::rpc::send_buffer>(send_buffer_handler);
+        hg.register_handler<example_rpcs::send_buffer>(send_buffer_handler);
 
-        hg.register_handler<hermes::rpc::send_file>(send_file_handler);
-#endif
+        hg.register_handler<example_rpcs::send_file>(send_file_handler);
 
         example_class ex(hg);
 
@@ -146,8 +160,11 @@ main(int argc, char* argv[]) {
         hg.run();
 
         while(true) {
-            sleep(1);
+            sleep(10);
+            break;
         }
+
+        INFO("Shutting down");
     } 
     catch(const std::exception& ex) {
         ERROR("{}", ex.what());
