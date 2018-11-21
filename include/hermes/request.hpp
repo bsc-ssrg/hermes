@@ -61,17 +61,6 @@ public:
         m_args(std::forward<RequestInput>(args)),
         m_requires_response(requires_response) { }
 
-    template <typename RequestInput, 
-              typename Enable = 
-                  typename std::is_same<Input, RequestInput>::type>
-    request(hg_handle_t handle, 
-            hg_bulk_t remote_bulk_handle, 
-            RequestInput&& args,
-            bool requires_response = true) :
-        m_handle(handle),
-        m_args(std::forward<RequestInput>(args)),
-        m_requires_response(requires_response) { }
-
     request(const request& other) = delete;
     request(request&& rhs) = default;
     request& operator=(const request& other) = delete;
@@ -87,13 +76,16 @@ public:
     }
 
     ~request() { 
-        DEBUG2("*********************** HG_Destroy({})", fmt::ptr(m_handle));
-        HG_Destroy(m_handle);
+        DEBUG2("{}()", __func__);
+
+        if(m_handle != HG_HANDLE_NULL) {
+            DEBUG2("*********************** HG_Destroy({})", fmt::ptr(m_handle));
+            HG_Destroy(m_handle);
+        }
     }
 
     //TODO: make private
-//private:
-public:
+private:
     hg_handle_t m_handle;
     bool m_requires_response;
     Input m_args;

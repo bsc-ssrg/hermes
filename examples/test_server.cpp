@@ -86,8 +86,6 @@ main(int argc, char* argv[]) {
         const auto send_buffer_handler = 
             [&](hermes::request<example_rpcs::send_buffer>&& req) {
 
-INFO("===== req.m_handle: {}", fmt::ptr(req.m_handle));
-
                 example_rpcs::send_buffer::input args = req.args();
 
                 hermes::exposed_memory remote_buffers = args.buffers();
@@ -119,8 +117,6 @@ INFO("===== req.m_handle: {}", fmt::ptr(req.m_handle));
                 const auto do_pull_completion = [bufseq, &hg](
                         hermes::request<example_rpcs::send_buffer>&& req) {
 
-INFO("===== req.m_handle: {}", fmt::ptr(req.m_handle));
-
                     INFO("    Pull successful!");
 
                     for(auto&& buf : bufseq) {
@@ -139,17 +135,15 @@ INFO("===== req.m_handle: {}", fmt::ptr(req.m_handle));
                     }
                 };
 
-INFO("===== req.m_handle: {}", fmt::ptr(req.m_handle));
-
-                hg.async_pull(std::move(remote_buffers),
-                              std::move(local_buffers),
+                hg.async_pull(remote_buffers,
+                              local_buffers,
                               std::move(req),
                               do_pull_completion);
             };
 
         hg.register_handler<example_rpcs::send_buffer>(send_buffer_handler);
 
-        hg.register_handler<example_rpcs::send_file>(send_file_handler);
+        // hg.register_handler<example_rpcs::send_file>(send_file_handler);
 
         example_class ex(hg);
 
@@ -160,7 +154,7 @@ INFO("===== req.m_handle: {}", fmt::ptr(req.m_handle));
         hg.run();
 
         while(true) {
-            sleep(10);
+            sleep(5);
             break;
         }
 

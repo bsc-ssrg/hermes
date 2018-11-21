@@ -55,6 +55,7 @@ main(int argc, char* argv[]) {
         }
 #endif
 
+#if 0
         /*********************************************************************** 
          * Example 2: posting an RPC with arbitrary arguments plus an 
          * additional transfer of associated buffers 
@@ -116,6 +117,7 @@ main(int argc, char* argv[]) {
         for(auto&& rv : results2a) {
             INFO("{}", rv.retval());
         }
+#endif
     } 
     catch(const std::exception& ex) {
         ERROR("{}\n", ex.what());

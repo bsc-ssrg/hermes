@@ -1393,13 +1393,13 @@ HG_Addr_free(m_hg_class, self_addr);
 #endif
 
     template <typename Input, typename Callable>
-    void async_pull(exposed_memory&& src,
-                    exposed_memory&& dst,
+    void async_pull(const exposed_memory& src,
+                    const exposed_memory& dst,
                     request<Input>&& req,
                     Callable&& user_callback) {
 
-        hg_bulk_t local_bulk_handle = hg_bulk_t(dst);
-        hg_bulk_t remote_bulk_handle = hg_bulk_t(src);
+        hg_bulk_t local_bulk_handle = dst.mercury_bulk_handle();
+        hg_bulk_t remote_bulk_handle = src.mercury_bulk_handle();
 
         assert(local_bulk_handle != HG_BULK_NULL);
         assert(remote_bulk_handle != HG_BULK_NULL);
@@ -1414,12 +1414,8 @@ HG_Addr_free(m_hg_class, self_addr);
         // the transfer_context and invoke the actual user callback
         struct transfer_context {
             transfer_context(request<Input>&& req, 
-                             exposed_memory&& src, 
-                             exposed_memory&& dst,
                              Callable&& user_callback) :
                 m_request(std::move(req)),
-                m_src(src),
-                m_dst(dst),
                 m_user_callback(user_callback) { }
 
             ~transfer_context() {
@@ -1427,8 +1423,6 @@ HG_Addr_free(m_hg_class, self_addr);
             }
 
             request<Input> m_request;
-            exposed_memory m_src;
-            exposed_memory m_dst;
             // XXX For some reason, declaring m_user_callback as:
             //    Callable m_user_callback;
             // causes a weird bug with GCC 4.9 where any variables captured 
@@ -1437,12 +1431,8 @@ HG_Addr_free(m_hg_class, self_addr);
             std::function<void(request<Input>&&)> m_user_callback;
         };
 
-INFO("===== req.m_handle: {}", fmt::ptr(req.m_handle));
-
         auto* ctx =
             new transfer_context(std::move(req), 
-                                 std::move(src),
-                                 std::move(dst),
                                  user_callback);
 
         const auto completion_callback =
@@ -1459,7 +1449,6 @@ INFO("===== req.m_handle: {}", fmt::ptr(req.m_handle));
                         std::unique_ptr<transfer_context>(
                                 reinterpret_cast<transfer_context*>(cbi->arg));
 
-INFO("===== req.m_handle: {}", fmt::ptr(ctx->m_request.m_handle));
                     ctx->m_user_callback(std::move(ctx->m_request));
 
                     return HG_SUCCESS;
