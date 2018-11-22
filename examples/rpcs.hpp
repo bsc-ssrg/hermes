@@ -418,7 +418,8 @@ struct rpc_descriptor<rpc::send_message> : public rpc_descriptor_base {
             throw std::runtime_error("User handler not set");
         }
 
-        m_user_handler(std::forward<Request>(req));
+        //m_user_handler(std::forward<Request>(req));
+        m_user_handler(std::move(req));
     }
 
     using handler_type = std::function<void(request<input_type>&&)>;

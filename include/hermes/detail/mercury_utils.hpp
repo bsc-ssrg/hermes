@@ -138,15 +138,6 @@ decode_mercury_input(hg_handle_t handle) {
                 std::string(HG_Error_to_string(ret)));
     }
 
-#if 0
-    Input args = Input(hg_input);
-
-    // It is now safe to delete the input received by Mercury, since
-    // we now have a copy of the user's arguments
-    HG_Free_input(handle, &hg_input);
-
-    return args;
-#endif
     return hg_input;
 }
 
@@ -260,21 +251,6 @@ post_to_mercury(ExecutionContext* ctx) {
             return cbi->ret;
         }
 
-        // decode response
-        
-
-
-#if 0
-        MercuryOutput output_val;
-        hg_return_t ret = HG_Get_output(cbi->info.forward.handle, &output_val);
-
-        if(ret != HG_SUCCESS) {
-            throw std::runtime_error(
-                    std::string("Failed to decode RPC response: ") +
-                                HG_Error_to_string(ret));
-        }
-#endif
-
         DEBUG2("Setting output promise");
 
         MercuryOutput hg_output = 
@@ -286,10 +262,6 @@ post_to_mercury(ExecutionContext* ctx) {
         // clean up resources consumed by this RPC
         HG_Free_output(cbi->info.forward.handle, &hg_output);
         HG_Destroy(cbi->info.forward.handle);
-
-    //    const struct hg_info* hgi = HG_Get_info(ctx->m_handle);
-
-    //    HG_Addr_free(hgi->hg_class, hgi->addr);
 
         return HG_SUCCESS;
     };
@@ -418,24 +390,6 @@ template <typename Request>
 static inline hg_return_t
 mercury_handler(hg_handle_t handle) {
 
-#if 0
-    using mercury_input_type = typename Request::mercury_input_type;
-    using mercury_output_type = typename Request::mercury_output_type;
-    mercury_input_type hg_input;
-    mercury_output_type out;
-
-    hg_return_t ret = HG_Get_input(handle, &hg_input);
-
-    INFO("message: {}", hg_input.message);
-
-    out.retval = 42;
-    HG_Respond(handle, NULL, NULL, &out);
-
-    HG_Free_input(handle, &hg_input);
-    HG_Destroy(handle);
-    return HG_SUCCESS;
-
-#else
     // using input_type = typename Request::input_type;
     // using mercury_input_type = typename Request::mercury_input_type;
 
@@ -448,10 +402,9 @@ mercury_handler(hg_handle_t handle) {
                                  "of unknown type");
     }
 
-    descriptor->invoke_user_handler(request<Request>(handle));
+    descriptor->invoke_user_handler(std::move(request<Request>(handle)));
 
     return HG_SUCCESS;
-#endif
 }
 
 

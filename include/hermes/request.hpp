@@ -1,6 +1,8 @@
 #ifndef __HERMES_REQUEST_HPP__
 #define __HERMES_REQUEST_HPP__
 
+#include <memory>
+
 #include "logging.hpp"
 
 namespace hermes {
@@ -54,26 +56,42 @@ public:
     request(hg_handle_t handle, 
             bool requires_response = true) :
         m_handle(handle),
-
-        m_mercury_input(detail::decode_mercury_input<Request>(m_handle)),
-        m_input(Input(m_mercury_input)),
-
-        m_requires_response(requires_response) { 
-
-
-        // m_mercury_input = detail::decode_mercury_input<Request>(m_handle);
-        // m_input = Input(m_mercury_input);
-
-        
-    }
+        m_mercury_input(std::make_unique<MercuryInput>(
+                    detail::decode_mercury_input<Request>(m_handle))),
+        m_input(std::make_unique<Input>(*m_mercury_input)),
+        m_requires_response(requires_response) { }
 
     request(const request& other) = delete;
-    request(request&& rhs) = default;
+    request(request&& rhs) :
+        m_handle(std::move(rhs.m_handle)),
+        m_mercury_input(std::move(rhs.m_mercury_input)),
+        m_input(std::move(rhs.m_input)),
+        m_requires_response(std::move(rhs.m_requires_response)) { 
+
+        rhs.m_handle = HG_HANDLE_NULL;
+        rhs.m_requires_response = false;
+    }
+
     request& operator=(const request& other) = delete;
-    request& operator=(request&& rhs) = default;
+
+    request& 
+    operator=(request&& rhs) {
+
+        if(this != &rhs) {
+            m_handle = std::move(rhs.m_handle);
+            m_mercury_input = std::move(rhs.m_mercury_input);
+            m_input = std::move(rhs.m_input);
+            m_requires_response = std::move(rhs.m_requires_response);
+
+            rhs.m_handle = HG_HANDLE_NULL;
+            rhs.m_requires_response = false;
+        }
+
+        return *this;
+    }
 
     Input args() const {
-        return m_input;
+        return *m_input;
     }
 
     bool
@@ -85,15 +103,30 @@ public:
         DEBUG2("{}()", __func__);
 
         if(m_handle != HG_HANDLE_NULL) {
-            DEBUG2("HG_Destroy({})", fmt::ptr(m_handle));
-            HG_Destroy(m_handle);
+
+            hg_return_t ret = HG_SUCCESS;
+
+            if(m_mercury_input) {
+                ret = HG_Free_input(m_handle, m_mercury_input.get());
+
+                DEBUG2("HG_Free_input({}, {}) = {}", 
+                    fmt::ptr(m_handle), fmt::ptr(&m_mercury_input), 
+                    HG_Error_to_string(ret));
+            }
+
+            ret = HG_Destroy(m_handle);
+
+            DEBUG2("HG_Destroy({}) = {}", 
+                   fmt::ptr(m_handle), HG_Error_to_string(ret));
+
+            (void) ret; // avoid warnings if !DEBUG
         }
     }
 
 private:
     hg_handle_t m_handle;
-    MercuryInput m_mercury_input;
-    Input m_input;
+    std::unique_ptr<MercuryInput> m_mercury_input;
+    std::unique_ptr<Input> m_input;
     bool m_requires_response;
 };
 

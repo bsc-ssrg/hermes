@@ -155,7 +155,7 @@ main(int argc, char* argv[]) {
 
         while(true) {
             sleep(5);
-        //    break;
+            break;
         }
 
         INFO("Shutting down");
