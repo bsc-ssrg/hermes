@@ -44,6 +44,17 @@ register_mercury_rpc(hg_class_t* hg_class,
                             std::string(descriptor->m_name) + "': " +
                             std::string(HG_Error_to_string(ret)));
     }
+
+    if(!descriptor->m_requires_response) {
+        ret = HG_Registered_disable_response(
+                    hg_class, descriptor->m_mercury_id, true);
+
+        if(ret != HG_SUCCESS) {
+            throw std::runtime_error("Failed to disable response for RPC [" +
+                                std::string(descriptor->m_name) + "]: " +
+                                std::string(HG_Error_to_string(ret)));
+        }
+    }
 }
 
 inline hg_handle_t
@@ -251,16 +262,18 @@ post_to_mercury(ExecutionContext* ctx) {
             return cbi->ret;
         }
 
-        DEBUG2("Setting output promise");
+        if(Request::requires_response) {
+            DEBUG2("Decoding RPC output and setting promise");
 
-        MercuryOutput hg_output = 
-            detail::decode_mercury_output<Request>(
-                    cbi->info.forward.handle);
+            MercuryOutput hg_output = 
+                detail::decode_mercury_output<Request>(
+                        cbi->info.forward.handle);
 
-        ctx->m_output_promise.set_value(RequestOutput(hg_output));
-                
-        // clean up resources consumed by this RPC
-        HG_Free_output(cbi->info.forward.handle, &hg_output);
+            ctx->m_output_promise.set_value(RequestOutput(hg_output));
+            // clean up resources consumed by this RPC
+            HG_Free_output(cbi->info.forward.handle, &hg_output);
+        }
+
         HG_Destroy(cbi->info.forward.handle);
 
         return HG_SUCCESS;

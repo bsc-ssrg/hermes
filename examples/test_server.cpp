@@ -21,6 +21,7 @@ shutdown_handler(hermes::request<example_rpcs::shutdown>&& req) {
 
     INFO("RPC received:");
     INFO("    type: shutdown"); 
+    INFO("    requires_response?: {}", req.requires_response()); 
 
     bool expected = false;
     while(!shutdown_requested.compare_exchange_weak(expected, true) 

@@ -620,21 +620,20 @@ public:
     rpc_handle_v2& operator=(rpc_handle_v2&&) = default;
 
     ~rpc_handle_v2() {
-        DEBUG2("{}", __func__);
-//        wait();// TODO
-    }
+        DEBUG2("{}()", __func__);
 
-    void
-    wait() const {
-        for(auto&& f : m_futures) {
-            if(f.valid()) {
-                f.wait();
-            }
+        if(Request::requires_response) {
+            (void) get();
         }
     }
 
     std::vector<Output>
     get() const {
+
+        if(!Request::requires_response) {
+            throw std::runtime_error("This request type does not expect a "
+                                     "response");
+        }
 
         assert(m_futures.size() == m_ctxs.size());
 
@@ -647,9 +646,16 @@ public:
         std::vector<bool> retrieved(m_futures.size(), false);
         std::vector<uint8_t> retries(m_futures.size(), RETRIES);
 
-        for(auto pending_requests = m_futures.size();
-            pending_requests > 0; 
-            /* counter decrease is internal to the loop */) {
+        std::size_t pending_requests = 
+            std::accumulate(m_futures.begin(),
+                            m_futures.end(),
+                            0,
+                            [](std::size_t prev, 
+                               const std::future<Output>& fut) -> std::size_t {
+                                return prev + (fut.valid() ? 1 : 0);
+                            });
+
+        while(pending_requests > 0) {
 
             for(std::size_t i = 0; i < m_futures.size(); ++i) {
 
@@ -667,8 +673,10 @@ public:
                                     detail::request_status::cancelled);
 
                         DEBUG2("Mercury request timed out, {}",
-                                m_ctxs[i]->m_status == detail::request_status::timeout ?
-                                fmt::format("reposting request ({} of {})", RETRIES - retries[i], RETRIES) :
+                                m_ctxs[i]->m_status == 
+                                    detail::request_status::timeout ?
+                                fmt::format("reposting request ({} of {})", 
+                                    RETRIES - retries[i], RETRIES) :
                                 "cancelling");
 
 

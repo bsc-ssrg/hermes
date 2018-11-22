@@ -53,6 +53,9 @@ struct send_message {
     // RPC name
     constexpr static const auto name = "send_message";
 
+    // requires response?
+    constexpr static const auto requires_response = true;
+
     // Mercury callback to serialize input arguments
     constexpr static const auto mercury_in_proc_cb = 
         HG_GEN_PROC_NAME(send_message_in_t);
@@ -168,6 +171,9 @@ struct send_file {
 
     // RPC name
     constexpr static const auto name = "send_file";
+
+    // requires response?
+    constexpr static const auto requires_response = true;
 
     // Mercury callback to serialize input arguments
     constexpr static const auto mercury_in_proc_cb = 
@@ -293,6 +299,9 @@ struct send_buffer {
 
     // RPC name
     constexpr static const auto name = "send_buffer";
+
+    // requires response?
+    constexpr static const auto requires_response = true;
 
     // Mercury callback to serialize input arguments
     constexpr static const auto mercury_in_proc_cb = 
@@ -424,6 +433,9 @@ struct shutdown {
 
     // RPC name
     constexpr static const auto name = "shutdown";
+
+    // requires response?
+    constexpr static const auto requires_response = false;
 
     // Mercury callback to serialize input arguments
     constexpr static const auto mercury_in_proc_cb =

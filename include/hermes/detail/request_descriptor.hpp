@@ -35,12 +35,14 @@ public:
     request_descriptor_base(uint16_t id,
                             const hg_id_t hg_id,
                             const char* const name,
+                            const bool requires_response,
                             const hg_proc_cb_t in_proc_cb,
                             const hg_proc_cb_t out_proc_cb,
                             const hg_rpc_cb_t handler) :
         m_id(id),
         m_mercury_id(hg_id),
         m_name(name),
+        m_requires_response(requires_response),
         m_mercury_input_cb(in_proc_cb),
         m_mercury_output_cb(out_proc_cb),
         m_handler(handler) {}
@@ -57,6 +59,7 @@ public:
     const uint16_t m_id;
     const hg_id_t m_mercury_id;
     const char* const m_name;
+    const bool m_requires_response;
     const hg_proc_cb_t m_mercury_input_cb;
     const hg_proc_cb_t m_mercury_output_cb;
     const hg_rpc_cb_t m_handler;
@@ -82,6 +85,9 @@ struct request_descriptor : public request_descriptor_base {
     // RPC name
     constexpr static const auto name = Request::name;
 
+    // requires response?
+    constexpr static const auto requires_response = Request::requires_response;
+
     // Mercury callback to serialize input arguments
     constexpr static const auto mercury_in_proc_cb = 
         Request::mercury_in_proc_cb;
@@ -94,11 +100,13 @@ struct request_descriptor : public request_descriptor_base {
     request_descriptor(uint16_t id,
                        const hg_id_t hg_id,
                        const char* const name,
+                       const bool requires_response,
                        const hg_proc_cb_t in_proc_cb,
                        hg_proc_cb_t out_proc_cb) :
         request_descriptor_base(id, 
                                 hg_id, 
                                 name, 
+                                requires_response,
                                 in_proc_cb, 
                                 out_proc_cb, 
                                 mercury_handler<request_type>) {}

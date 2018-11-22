@@ -40,6 +40,7 @@ public:
         constexpr const uint16_t id = Request::public_id;
         constexpr const hg_id_t mercury_id = Request::mercury_id;
         constexpr const auto name = Request::name;
+        constexpr const auto requires_response = Request::requires_response;
         constexpr const auto mercury_in_proc_cb = Request::mercury_in_proc_cb;
         constexpr const auto mercury_out_proc_cb = Request::mercury_out_proc_cb;
 
@@ -51,8 +52,8 @@ public:
 
         m_request_types.emplace(id, 
                 std::make_shared<request_descriptor<Request>>(
-                    id, mercury_id, name, mercury_in_proc_cb, 
-                    mercury_out_proc_cb));
+                    id, mercury_id, name, requires_response, 
+                    mercury_in_proc_cb, mercury_out_proc_cb));
 
         return true;
     }

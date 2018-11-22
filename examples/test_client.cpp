@@ -109,8 +109,8 @@ main(int argc, char* argv[]) {
 
         // wait for results
         hermes::output_set<example_rpcs::send_buffer> results2a = rpc2a.get();
-        hermes::output_set<example_rpcs::send_buffer> results2b = rpc2b.get();
-        hermes::output_set<example_rpcs::send_buffer> results2c = rpc2c.get();
+        // hermes::output_set<example_rpcs::send_buffer> results2b = rpc2b.get();
+        // hermes::output_set<example_rpcs::send_buffer> results2c = rpc2c.get();
 
         INFO("result_set size {}:", results2a.size());
 
@@ -121,8 +121,7 @@ main(int argc, char* argv[]) {
 
         INFO("Sending [shutdown]");
 
-        auto rpc_shutdown = hg.post<example_rpcs::shutdown>(endps[0]);
-
+        hg.post<example_rpcs::shutdown>(endps[0]);
     } 
     catch(const std::exception& ex) {
         ERROR("{}\n", ex.what());
