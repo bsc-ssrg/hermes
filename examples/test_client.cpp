@@ -118,6 +118,11 @@ main(int argc, char* argv[]) {
             INFO("{}", rv.retval());
         }
 #endif
+
+        INFO("Sending [shutdown]");
+
+        auto rpc_shutdown = hg.post<example_rpcs::shutdown>(endps[0]);
+
     } 
     catch(const std::exception& ex) {
         ERROR("{}\n", ex.what());

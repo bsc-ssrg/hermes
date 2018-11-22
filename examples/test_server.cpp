@@ -14,6 +14,19 @@ using hermes::send_message_args;
 using hermes::send_buffer_args;
 #endif
 
+std::atomic<bool> shutdown_requested(false);
+
+void
+shutdown_handler(hermes::request<example_rpcs::shutdown>&& req) {
+
+    INFO("RPC received:");
+    INFO("    type: shutdown"); 
+
+    bool expected = false;
+    while(!shutdown_requested.compare_exchange_weak(expected, true) 
+            && !expected);
+}
+
 void
 send_file_handler(hermes::request<example_rpcs::send_file>&& req) {
 
@@ -145,6 +158,8 @@ main(int argc, char* argv[]) {
 
         hg.register_handler<example_rpcs::send_file>(send_file_handler);
 
+        hg.register_handler<example_rpcs::shutdown>(shutdown_handler);
+
         example_class ex(hg);
 
         hg.register_handler<example_rpcs::send_message>(
@@ -153,9 +168,8 @@ main(int argc, char* argv[]) {
 
         hg.run();
 
-        while(true) {
-            sleep(5);
-            break;
+        while(!shutdown_requested) {
+            sleep(1);
         }
 
         INFO("Shutting down");

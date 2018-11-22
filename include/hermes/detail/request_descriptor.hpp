@@ -117,7 +117,8 @@ struct request_descriptor : public request_descriptor_base {
     invoke_user_handler(RequestHandle&& req) {
 
         if(!m_user_handler) {
-            throw std::runtime_error("User handler not set");
+            throw std::runtime_error("User handler for request [" + 
+                    std::string(name) +  "] not set");
         }
 
         m_user_handler(std::forward<RequestHandle>(req));

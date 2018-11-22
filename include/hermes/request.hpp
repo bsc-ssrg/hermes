@@ -62,6 +62,7 @@ public:
         m_requires_response(requires_response) { }
 
     request(const request& other) = delete;
+
     request(request&& rhs) :
         m_handle(std::move(rhs.m_handle)),
         m_mercury_input(std::move(rhs.m_mercury_input)),

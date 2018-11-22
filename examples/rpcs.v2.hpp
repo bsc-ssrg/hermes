@@ -380,6 +380,115 @@ struct send_buffer {
 
 } // namespace example_rpcs
 
+
+//==============================================================================
+// definitions for example_rpcs::shutdown
+namespace hermes { namespace detail {
+
+// Generate Mercury types and serialization functions (field names match
+// those defined by shutdown::input and shutdown::output). These
+// definitions are internal and should not be used directly. Classes
+// shutdown::input and shutdown::output are provided for public use.
+
+MERCURY_GEN_PROC(shutdown_in_t,
+        ((int32_t) (foo))
+);
+
+MERCURY_GEN_PROC(shutdown_out_t,
+        ((int32_t) (retval))
+);
+
+}} // namespace hermes::detail
+
+namespace example_rpcs {
+
+struct shutdown {
+
+    // forward declarations of public input/output types for this RPC
+    class input;
+    class output;
+
+    // traits used so that the engine knows what to do with the RPC
+    using self_type = shutdown;
+    using handle_type = hermes::rpc_handle_v2<self_type>;
+    using input_type = input;
+    using output_type = output;
+    using mercury_input_type = hermes::detail::shutdown_in_t;
+    using mercury_output_type = hermes::detail::shutdown_out_t;
+
+    // RPC public identifier
+    constexpr static const uint16_t public_id = 45;
+
+    // RPC internal Mercury identifier
+    constexpr static const uint16_t mercury_id = public_id;
+
+    // RPC name
+    constexpr static const auto name = "shutdown";
+
+    // Mercury callback to serialize input arguments
+    constexpr static const auto mercury_in_proc_cb =
+        HG_GEN_PROC_NAME(shutdown_in_t);
+
+    // Mercury callback to serialize output arguments
+    constexpr static const auto mercury_out_proc_cb = 
+        HG_GEN_PROC_NAME(shutdown_out_t);
+
+    class input {
+
+        template <typename ExecutionContext>
+        friend hg_return_t hermes::detail::post_to_mercury(ExecutionContext*);
+
+    public:
+        input() { }
+
+//TODO: make private
+        explicit
+        input(const hermes::detail::shutdown_in_t& other) { 
+            (void) other;
+        }
+        
+        explicit
+        operator hermes::detail::shutdown_in_t() {
+            return {0};
+        }
+    };
+
+    class output {
+
+        template <typename ExecutionContext>
+        friend hg_return_t hermes::detail::post_to_mercury(ExecutionContext*);
+
+    public:
+        output(int32_t retval) :
+            m_retval(retval) { }
+
+        int32_t
+        retval() const {
+            return m_retval;
+        }
+
+        void
+        set_retval(int32_t retval) {
+            m_retval = retval;
+        }
+
+        explicit 
+        output(const hermes::detail::shutdown_out_t& out) {
+            m_retval = out.retval;
+        }
+
+        explicit 
+        operator hermes::detail::shutdown_out_t() {
+            return {m_retval};
+        }
+
+    private:
+        int32_t m_retval;
+    };
+};
+
+} // namespace example_rpcs
+
 //==============================================================================
 // register request types so that they can be used by users and the engine
 namespace hermes { namespace detail {
@@ -392,6 +501,9 @@ static bool type2 __attribute__((used)) =
 
 static bool type3 __attribute__((used)) = 
     registered_requests().add<example_rpcs::send_buffer>();
+
+static bool type4 __attribute__((used)) = 
+    registered_requests().add<example_rpcs::shutdown>();
 
 }} // namespace hermes::detail
 

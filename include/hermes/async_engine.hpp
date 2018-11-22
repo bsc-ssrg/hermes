@@ -1214,6 +1214,26 @@ HG_Addr_free(m_hg_class, self_addr);
     typename Request::handle_type
     post(Endpoint&& target,
          Args&&... args) {
+
+        using Input = typename Request::input_type;
+        using Handle = typename Request::handle_type;
+
+        DEBUG2("Posting RPC to single endpoint");
+
+        auto handle = Handle(m_hg_context, 
+                             {target.address()},
+                             Input(std::forward<Args>(args)...));
+
+        const auto& ctx = handle.m_ctxs[0];
+
+        hg_return ret = detail::post_to_mercury(ctx.get());
+
+        if(ret != HG_SUCCESS) {
+            throw std::runtime_error("Failed to post RPC: " + 
+                    std::string(HG_Error_to_string(ret)));
+        }
+
+        return handle;
     }
 
 
