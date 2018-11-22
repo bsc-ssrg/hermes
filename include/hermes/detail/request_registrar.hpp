@@ -52,7 +52,7 @@ public:
         m_request_types.emplace(id, 
                 std::make_shared<request_descriptor<Request>>(
                     id, mercury_id, name, mercury_in_proc_cb, 
-                    mercury_out_proc_cb, nullptr));
+                    mercury_out_proc_cb));
 
         return true;
     }

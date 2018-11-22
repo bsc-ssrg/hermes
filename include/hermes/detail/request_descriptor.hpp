@@ -95,8 +95,7 @@ struct request_descriptor : public request_descriptor_base {
                        const hg_id_t hg_id,
                        const char* const name,
                        const hg_proc_cb_t in_proc_cb,
-                       hg_proc_cb_t out_proc_cb,
-                       const hg_rpc_cb_t handler) :
+                       hg_proc_cb_t out_proc_cb) :
         request_descriptor_base(id, 
                                 hg_id, 
                                 name, 

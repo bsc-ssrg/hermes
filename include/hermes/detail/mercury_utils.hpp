@@ -116,14 +116,83 @@ create_mercury_bulk_handle(hg_class_t* hg_class,
     return bulk_handle;
 }
 
+template <typename Request>
+static inline typename Request::mercury_input_type
+decode_mercury_input(hg_handle_t handle) {
+
+    //using Input = typename Request::input_type;
+    using MercuryInput = typename Request::mercury_input_type;
+
+    if(handle == HG_HANDLE_NULL) {
+        throw std::runtime_error("Invalid handle passed to "
+                                 "decode_mercury_input()");
+    }
+
+    MercuryInput hg_input;
+
+    // decode input
+    hg_return_t ret = HG_Get_input(handle, &hg_input);
+
+    if(ret != HG_SUCCESS) {
+        throw std::runtime_error("Failed to decode request input data: " +
+                std::string(HG_Error_to_string(ret)));
+    }
+
+#if 0
+    Input args = Input(hg_input);
+
+    // It is now safe to delete the input received by Mercury, since
+    // we now have a copy of the user's arguments
+    HG_Free_input(handle, &hg_input);
+
+    return args;
+#endif
+    return hg_input;
+}
+
+template <typename Request>
+static inline typename Request::mercury_output_type
+decode_mercury_output(hg_handle_t handle) {
+
+    //using Output = typename Request::output_type;
+    using MercuryOutput = typename Request::mercury_output_type;
+
+    if(handle == HG_HANDLE_NULL) {
+        throw std::runtime_error("Invalid handle passed to "
+                                 "decode_mercury_input()");
+    }
+
+    MercuryOutput hg_output;
+
+    // decode output
+    hg_return_t ret = HG_Get_output(handle, &hg_output);
+
+    if(ret != HG_SUCCESS) {
+        throw std::runtime_error("Failed to decode request output data: " +
+                std::string(HG_Error_to_string(ret)));
+    }
+
+    return hg_output;
+
+#if 0
+    Output rv = Output(hg_output);
+
+    // It is now safe to delete the output provided by Mercury, since
+    // we now have a copy of the user's return value
+    HG_Free_output(handle, &hg_output);
+
+    return rv;
+#endif
+}
+
 template <typename ExecutionContext>
 hg_return_t
 post_to_mercury(ExecutionContext* ctx) {
 
     using Request = typename ExecutionContext::value_type;
-    using MercuryInput = typename Request::mercury_input_type;
+    // using MercuryInput = typename Request::mercury_input_type;
     using MercuryOutput = typename Request::mercury_output_type;
-    using RequestInput = typename Request::input_type;
+    // using RequestInput = typename Request::input_type;
     using RequestOutput = typename Request::output_type;
 
     DEBUG("Sending request");
@@ -192,6 +261,10 @@ post_to_mercury(ExecutionContext* ctx) {
         }
 
         // decode response
+        
+
+
+#if 0
         MercuryOutput output_val;
         hg_return_t ret = HG_Get_output(cbi->info.forward.handle, &output_val);
 
@@ -200,14 +273,18 @@ post_to_mercury(ExecutionContext* ctx) {
                     std::string("Failed to decode RPC response: ") +
                                 HG_Error_to_string(ret));
         }
+#endif
 
         DEBUG2("Setting output promise");
 
-        ctx->m_output_promise.set_value(RequestOutput(output_val));
+        MercuryOutput hg_output = 
+            detail::decode_mercury_output<Request>(
+                    cbi->info.forward.handle);
 
+        ctx->m_output_promise.set_value(RequestOutput(hg_output));
+                
         // clean up resources consumed by this RPC
-
-        HG_Free_output(cbi->info.forward.handle, &output_val);
+        HG_Free_output(cbi->info.forward.handle, &hg_output);
         HG_Destroy(cbi->info.forward.handle);
 
     //    const struct hg_info* hgi = HG_Get_info(ctx->m_handle);
@@ -336,12 +413,31 @@ mercury_respond(request<Input>&& req,
     }
 }
 
+
 template <typename Request>
 static inline hg_return_t
 mercury_handler(hg_handle_t handle) {
 
-    using input_type = typename Request::input_type;
+#if 0
     using mercury_input_type = typename Request::mercury_input_type;
+    using mercury_output_type = typename Request::mercury_output_type;
+    mercury_input_type hg_input;
+    mercury_output_type out;
+
+    hg_return_t ret = HG_Get_input(handle, &hg_input);
+
+    INFO("message: {}", hg_input.message);
+
+    out.retval = 42;
+    HG_Respond(handle, NULL, NULL, &out);
+
+    HG_Free_input(handle, &hg_input);
+    HG_Destroy(handle);
+    return HG_SUCCESS;
+
+#else
+    // using input_type = typename Request::input_type;
+    // using mercury_input_type = typename Request::mercury_input_type;
 
     const auto descriptor = 
         std::static_pointer_cast<detail::request_descriptor<Request>>(
@@ -352,21 +448,12 @@ mercury_handler(hg_handle_t handle) {
                                  "of unknown type");
     }
 
-    mercury_input_type hg_input;
-
-    // decode input
-    hg_return_t ret = HG_Get_input(handle, &hg_input);
-
-    if(ret != HG_SUCCESS) {
-        throw std::runtime_error("Failed to decode request input data: " +
-                std::string(HG_Error_to_string(ret)));
-    }
-
-    descriptor->invoke_user_handler(
-            request<Request>(handle, input_type(hg_input)));
+    descriptor->invoke_user_handler(request<Request>(handle));
 
     return HG_SUCCESS;
+#endif
 }
+
 
 } // namespace detail
 } // namespace hermes

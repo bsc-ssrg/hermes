@@ -51,15 +51,21 @@ class request {
 // TODO: move this 'public' after ctors
 public:
 
-    template <typename RequestInput, 
-              typename Enable = 
-                  typename std::is_same<Input, RequestInput>::type>
     request(hg_handle_t handle, 
-            RequestInput&& args,
             bool requires_response = true) :
         m_handle(handle),
-        m_args(std::forward<RequestInput>(args)),
-        m_requires_response(requires_response) { }
+
+        m_mercury_input(detail::decode_mercury_input<Request>(m_handle)),
+        m_input(Input(m_mercury_input)),
+
+        m_requires_response(requires_response) { 
+
+
+        // m_mercury_input = detail::decode_mercury_input<Request>(m_handle);
+        // m_input = Input(m_mercury_input);
+
+        
+    }
 
     request(const request& other) = delete;
     request(request&& rhs) = default;
@@ -67,7 +73,7 @@ public:
     request& operator=(request&& rhs) = default;
 
     Input args() const {
-        return m_args;
+        return m_input;
     }
 
     bool
@@ -79,16 +85,16 @@ public:
         DEBUG2("{}()", __func__);
 
         if(m_handle != HG_HANDLE_NULL) {
-            DEBUG2("*********************** HG_Destroy({})", fmt::ptr(m_handle));
+            DEBUG2("HG_Destroy({})", fmt::ptr(m_handle));
             HG_Destroy(m_handle);
         }
     }
 
-    //TODO: make private
 private:
     hg_handle_t m_handle;
+    MercuryInput m_mercury_input;
+    Input m_input;
     bool m_requires_response;
-    Input m_args;
 };
 
 

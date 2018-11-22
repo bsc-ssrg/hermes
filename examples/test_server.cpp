@@ -143,7 +143,7 @@ main(int argc, char* argv[]) {
 
         hg.register_handler<example_rpcs::send_buffer>(send_buffer_handler);
 
-        // hg.register_handler<example_rpcs::send_file>(send_file_handler);
+        hg.register_handler<example_rpcs::send_file>(send_file_handler);
 
         example_class ex(hg);
 
@@ -155,7 +155,7 @@ main(int argc, char* argv[]) {
 
         while(true) {
             sleep(5);
-            break;
+        //    break;
         }
 
         INFO("Shutting down");

@@ -137,7 +137,7 @@ namespace hermes { namespace detail {
 // send_file::input and send_file::output are provided for public use.
 MERCURY_GEN_PROC(send_file_in_t,
         ((hg_const_string_t) (pathname))
-        ((hg_bulk_t) (bulk_handle)))
+        ((hg_bulk_t) (buffers)))
 
 MERCURY_GEN_PROC(send_file_out_t,
         ((int32_t) (retval)))
@@ -183,26 +183,36 @@ struct send_file {
         friend hg_return_t hermes::detail::post_to_mercury(ExecutionContext*);
 
     public:
-        input(const std::string& pathname) :
-            m_pathname(pathname) { }
+        input(const std::string& pathname,
+              const hermes::exposed_memory& buffers) :
+            m_pathname(pathname),
+            m_buffers(buffers) { }
 
         std::string
         pathname() const {
             return m_pathname;
         }
 
+        hermes::exposed_memory
+        buffers() const {
+            return m_buffers;
+        }
+
+//TODO: make private
         explicit
         input(const hermes::detail::send_file_in_t& other) :
-            m_pathname(other.pathname) { }
+            m_pathname(other.pathname),
+            m_buffers(other.buffers) { }
         
         explicit
         operator hermes::detail::send_file_in_t() {
-            return {m_pathname.c_str()};
+            return {m_pathname.c_str(), hg_bulk_t(m_buffers)};
         }
 
 
     private:
         std::string m_pathname;
+        hermes::exposed_memory m_buffers;
     };
 
     class output {
@@ -313,6 +323,12 @@ struct send_buffer {
             return m_pathname;
         }
 
+        hermes::exposed_memory
+        buffers() const {
+            return m_buffers;
+        }
+
+//TODO: make private
         explicit
         input(const hermes::detail::send_buffer_in_t& other) :
             m_pathname(other.pathname),
@@ -321,11 +337,6 @@ struct send_buffer {
         explicit
         operator hermes::detail::send_buffer_in_t() {
             return {m_pathname.c_str(), hg_bulk_t(m_buffers)};
-        }
-
-        hermes::exposed_memory
-        buffers() const {
-            return m_buffers;
         }
 
     private:

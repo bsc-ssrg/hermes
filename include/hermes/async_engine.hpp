@@ -687,7 +687,7 @@ public:
         DEBUG("Getting RPC results (pending: {})", m_futures.size());
 
         constexpr const auto TIMEOUT = std::chrono::seconds(1);
-        constexpr const auto RETRIES = 5;
+        constexpr const auto RETRIES = 1;
 
         std::vector<Output> result_set;
         std::vector<bool> retrieved(m_futures.size(), false);
@@ -1262,7 +1262,7 @@ HG_Addr_free(m_hg_class, self_addr);
               Args&&... args) {
 
         using Input = typename Request::input_type;
-        using Output = typename Request::output_type;
+        // using Output = typename Request::output_type;
         using Handle = typename Request::handle_type;
 
         DEBUG2("Posting RPC to multiple endpoints");
@@ -1498,7 +1498,7 @@ private:
 
         for(auto&& kv : detail::registered_requests()) {
 
-            auto&& id = kv.first;
+            // auto&& id = kv.first;
             auto&& descriptor = kv.second;
 
             DEBUG("**** registered: {}, {}, {}, {}, {}", 

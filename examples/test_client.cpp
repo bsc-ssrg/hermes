@@ -55,12 +55,12 @@ main(int argc, char* argv[]) {
         }
 #endif
 
-#if 0
+#if 1
         /*********************************************************************** 
          * Example 2: posting an RPC with arbitrary arguments plus an 
          * additional transfer of associated buffers 
          **********************************************************************/
-        char data[] = {"These are the contents of a user buffer\0"};
+        __attribute__((unused)) char data[]  = {"These are the contents of a user buffer\0"};
 
 #if 0
         std::vector<hermes::mutable_buffer> bufvec {
