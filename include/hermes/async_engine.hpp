@@ -555,54 +555,8 @@ struct endpoint_compare {
     }
 };
 
-/** */
-class endpoint_set {
 
-    friend class async_engine;
-
-public:
-
-    using iterator = std::set<endpoint, endpoint_compare>::iterator;
-    using const_iterator = std::set<endpoint, endpoint_compare>::const_iterator;
-
-    endpoint_set() {}
-
-    explicit endpoint_set(std::initializer_list<endpoint>&& e_list) :
-        m_endpoints(e_list) {}
-
-    bool
-    add(endpoint&& endp) {
-        return m_endpoints.emplace(endp).second;
-    }
-
-    std::size_t
-    size() const {
-        return m_endpoints.size();
-    }
-
-    const_iterator
-    begin() const {
-        return m_endpoints.begin();
-    }
-
-    const_iterator
-    end() const {
-        return m_endpoints.end();
-    }
-
-    iterator
-    begin() {
-        return m_endpoints.begin();
-    }
-
-    iterator
-    end() {
-        return m_endpoints.end();
-    }
-
-private:
-    std::set<endpoint, endpoint_compare> m_endpoints;
-};
+using endpoint_set = std::vector<endpoint>;
 
 template <typename Request>
 using output_set = std::vector<typename Request::output_type>;
@@ -687,7 +641,7 @@ public:
         DEBUG("Getting RPC results (pending: {})", m_futures.size());
 
         constexpr const auto TIMEOUT = std::chrono::seconds(1);
-        constexpr const auto RETRIES = 1;
+        constexpr const auto RETRIES = 5;
 
         std::vector<Output> result_set;
         std::vector<bool> retrieved(m_futures.size(), false);
@@ -1182,7 +1136,7 @@ HG_Addr_free(m_hg_class, self_addr);
         // all lookups are posted to mercury and we only wait once on
         // total completion
         for(const auto addr : unique_addrs) {
-            endps.add(lookup(addr.first, addr.second));
+            endps.emplace_back(lookup(addr.first, addr.second));
         }
 
         return endps;
@@ -1255,6 +1209,13 @@ HG_Addr_free(m_hg_class, self_addr);
         return {m_hg_context, addrs, input};
     }
 #endif
+
+    template <typename Request, typename Endpoint, typename... Args>
+    typename Request::handle_type
+    post(Endpoint&& target,
+         Args&&... args) {
+    }
+
 
     template <typename Request, typename EndpointSet, typename... Args>
     typename Request::handle_type
