@@ -5,6 +5,9 @@
 #include <mercury.h>
 
 // project includes
+#include <hermes/logging.hpp>
+#include <hermes/request.hpp>
+#include <hermes/detail/execution_context.hpp>
 #include <hermes/detail/request_registrar.hpp>
 #include <hermes/detail/request_status.hpp>
 
@@ -287,9 +290,10 @@ post_to_mercury(ExecutionContext* ctx) {
     if(ctx->m_handle == HG_HANDLE_NULL) {
         // create a Mercury handle for the RPC and save it in the RPC's 
         // execution context
-        ctx->m_handle = detail::create_mercury_handle(ctx->m_hg_context,
-                                                      ctx->m_address->fetch(),
-                                                      Request::mercury_id);
+        ctx->m_handle = 
+            detail::create_mercury_handle(ctx->m_hg_context,
+                                          ctx->m_address->mercury_address(),
+                                          Request::mercury_id);
     }
 
     hg_return_t ret = HG_Forward(

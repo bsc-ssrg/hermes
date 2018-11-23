@@ -3,6 +3,11 @@
 
 #include <memory>
 
+// project includes
+#if __cplusplus == 201103L
+#include <hermes/make_unique.hpp>
+#endif // __cplusplus == 201103L
+
 #include "logging.hpp"
 
 namespace hermes {
@@ -21,6 +26,10 @@ inline void
 mercury_bulk_transfer(hermes::request<Input>&& req,
                       ExecutionContext&& ctx,
                       Callable&& completion_callback);
+
+template <typename Request>
+static inline typename Request::mercury_input_type
+decode_mercury_input(hg_handle_t handle);
 
 // defined elsewhere
 template <typename Input, typename Output>

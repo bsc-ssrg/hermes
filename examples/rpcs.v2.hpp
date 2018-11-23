@@ -38,7 +38,7 @@ struct send_message {
 
     // traits used so that the engine knows what to do with the RPC
     using self_type = send_message;
-    using handle_type = hermes::rpc_handle_v2<self_type>;
+    using handle_type = hermes::rpc_handle<self_type>;
     using input_type = input;
     using output_type = output;
     using mercury_input_type = hermes::detail::send_message_in_t;
@@ -157,7 +157,7 @@ struct send_file {
 
     // traits used so that the engine knows what to do with the RPC
     using self_type = send_file;
-    using handle_type = hermes::rpc_handle_v2<self_type>;
+    using handle_type = hermes::rpc_handle<self_type>;
     using input_type = input;
     using output_type = output;
     using mercury_input_type = hermes::detail::send_file_in_t;
@@ -285,7 +285,7 @@ struct send_buffer {
 
     // traits used so that the engine knows what to do with the RPC
     using self_type = send_buffer;
-    using handle_type = hermes::rpc_handle_v2<self_type>;
+    using handle_type = hermes::rpc_handle<self_type>;
     using input_type = input;
     using output_type = output;
     using mercury_input_type = hermes::detail::send_buffer_in_t;
@@ -419,7 +419,7 @@ struct shutdown {
 
     // traits used so that the engine knows what to do with the RPC
     using self_type = shutdown;
-    using handle_type = hermes::rpc_handle_v2<self_type>;
+    using handle_type = hermes::rpc_handle<self_type>;
     using input_type = input;
     using output_type = output;
     using mercury_input_type = hermes::detail::shutdown_in_t;

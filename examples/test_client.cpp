@@ -69,7 +69,7 @@ main(int argc, char* argv[]) {
 
 #else
 
-        auto pp = std::make_shared<hermes::mapped_buffer>("../examples/rpcs.hpp");
+        auto pp = std::make_shared<hermes::mapped_buffer>("../examples/rpcs.v2.hpp");
 
         std::vector<hermes::mutable_buffer> bufvec {
             hermes::mutable_buffer{pp->data(), pp->size()},
