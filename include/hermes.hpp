@@ -7,6 +7,7 @@
 #include <hermes/exposed_memory.hpp>
 #include <hermes/handle.hpp>
 #include <hermes/logging.hpp>
+#include <hermes/request.hpp>
 #include <hermes/transport.hpp>
 
 #endif // __HERMES_HPP__
