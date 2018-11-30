@@ -7,6 +7,7 @@
 // project includes
 #include <hermes/logging.hpp>
 #include <hermes/request.hpp>
+#include <hermes/detail/address.hpp>
 #include <hermes/detail/execution_context.hpp>
 #include <hermes/detail/request_registrar.hpp>
 #include <hermes/detail/request_status.hpp>
@@ -18,6 +19,89 @@ template <typename Request>
 class request;
 
 namespace detail {
+
+inline hg_class_t*
+initialize_mercury(const std::string& transport_prefix,
+                   const std::string& bind_address, 
+                   bool listen) {
+
+    assert(transport_prefix != "");
+
+    std::string address(transport_prefix);
+
+    if(bind_address != "") {
+        address += bind_address;
+    }
+
+    DEBUG("Initializing Mercury transport layer (address: {})", address);
+
+    hg_class_t* hg_class = 
+        HG_Init(address.c_str(),
+                listen ? HG_TRUE : HG_FALSE);
+
+    DEBUG2("HG_Init({}, {}) = {}", 
+           address, listen ? "HG_TRUE" : "HG_FALSE", fmt::ptr(hg_class));
+
+    if(hg_class == NULL) {
+        throw std::runtime_error("Failed to initialize Mercury");
+    }
+
+    return hg_class;
+}
+
+inline hg_context_t*
+create_mercury_context(hg_class_t* hg_class) {
+
+    DEBUG("Creating Mercury execution context");
+
+    hg_context_t* hg_context = HG_Context_create(hg_class);
+
+    DEBUG2("HG_Context_create({}) = {}", 
+           fmt::ptr(hg_class), fmt::ptr(hg_context));
+
+    if(hg_context == NULL) {
+        throw std::runtime_error("Failed to create Mercury context");
+    }
+
+    return hg_context;
+}
+
+
+inline std::string
+mercury_address_to_string(const hg_class_t* hg_class, 
+                          const hg_addr_t address) {
+
+    // first, find out required buffer size
+    hg_size_t buffer_size = 0;
+
+    hg_return ret = 
+        HG_Addr_to_string(
+                const_cast<hg_class_t*>(hg_class), 
+                NULL, 
+                &buffer_size, 
+                address);
+
+    if(ret != HG_SUCCESS) {
+        throw std::runtime_error("Failed to compute address length " +
+                                    std::string(HG_Error_to_string(ret)));
+    }
+
+    // allocate buffer and request the conversion fron Mercury
+    const auto buffer = std::make_unique<char[]>(buffer_size);
+
+    ret = HG_Addr_to_string(
+            const_cast<hg_class_t*>(hg_class), 
+            buffer.get(),
+            &buffer_size, 
+            address);
+
+    if(ret != HG_SUCCESS) {
+        throw std::runtime_error("Failed to compute address length " +
+                                    std::string(HG_Error_to_string(ret)));
+    }
+
+    return {buffer.get()};
+}
 
 template <typename Descriptor>
 inline void
@@ -213,13 +297,26 @@ post_to_mercury(ExecutionContext* ctx) {
                 {
                     DEBUG2("Request timed out, reposting");
                     // repost the request
-                    post_to_mercury<ExecutionContext>(ctx); 
+                    hg_return ret = post_to_mercury<ExecutionContext>(ctx);
+
+                    if(ret != HG_SUCCESS) {
+                        DEBUG2("Failed to repost request: {}", 
+                                HG_Error_to_string(ret));
+
+                        ctx->m_output_promise.set_exception(
+                            std::make_exception_ptr(
+                                std::runtime_error("Failed to repost request: "
+                                    + std::string(HG_Error_to_string(ret)))));
+
+                        return ret;
+                    }
+
                     break;
                 }
 
                 case request_status::cancelled:
                 {
-                    // this can only happen if the request timed out repeteadly
+                    // this can happen if the request timed out repeatedly
                     // and we exhausted the configured retries
                     // The only option is to definitely cancel the request and
                     // set an exception for the user
@@ -311,7 +408,7 @@ post_to_mercury(ExecutionContext* ctx) {
             "lambda::completion_callback",
             fmt::ptr(ctx), 
             fmt::ptr(&ctx->m_mercury_input), 
-            ret);
+            HG_Error_to_string(ret));
 
     return ret;
 }

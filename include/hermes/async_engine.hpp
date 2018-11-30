@@ -71,85 +71,36 @@ public:
     async_engine& operator=(async_engine&& rhs) = default;
 
     /**
-     * Initialize the Mercury asynchronous engine.
-     *
-     * @param tr_type [IN]  the desired transport type (see enum class
-     *                      tranport_type)
-     * @param listen  [IN]  listen for incoming connections
-     */
-    async_engine(transport tr_type, bool listen = false) :
+     * Initialize the Hermes asynchronous engine.
+     **/
+    async_engine(transport transport_type,
+                 const std::string& bind_address = "",
+                 bool listen = false) :
         m_shutdown(false),
         m_listen(listen),
-        m_transport(tr_type),
-        m_transport_prefix(
-            // we use an immediately-invoked lambda 
-            // to const-initialize m_transport_prefix
-            [tr_type]() {
+        m_transport(transport_type) {
 
-                if(!known_transports.count(tr_type)) {
-                    throw std::runtime_error("Failed to initialize Mercury: unknown "
-                                            "transport requested");
-                }
+        m_hg_class = 
+                detail::initialize_mercury(
+                        get_transport_prefix(m_transport), 
+                        bind_address, 
+                        m_listen);
 
-                return known_transports.at(tr_type);
-            }()) {
+        DEBUG2("m_hg_class: {}", static_cast<void*>(m_hg_class));
 
+        m_hg_context = detail::create_mercury_context(m_hg_class);
 
+        DEBUG2("m_hg_context: {}", static_cast<void*>(m_hg_context));
 
-        DEBUG("Initializing Mercury asynchronous engine");
+        if(m_listen) {
+            m_self_address = 
+                std::make_unique<detail::address>(
+                    detail::address::self_address(m_hg_class));
 
-        DEBUG("  Initializing transport layer");
-
-        const auto address = make_address("127.0.0.1", 22222);
-
-        m_hg_class = HG_Init(address.c_str(),
-                             m_listen ? HG_TRUE : HG_FALSE);
-
-        if(m_hg_class == NULL) {
-            throw std::runtime_error("Failed to initialize Mercury");
+            DEBUG("Self address: {}", m_self_address->to_string());
         }
 
-        hg_addr_t self_addr;
-        hg_return_t ret = HG_Addr_self(m_hg_class, &self_addr);
-
-        if(ret != HG_SUCCESS) {
-            throw std::runtime_error("Failed to retrieve self address: " + 
-                    std::string(HG_Error_to_string(ret)));
-        }
-
-        hg_size_t buf_size = 0;
-        ret = HG_Addr_to_string(m_hg_class, NULL, &buf_size, self_addr);
-
-        if(ret != HG_SUCCESS) {
-            throw std::runtime_error("Failed to compute address length " +
-                                     std::string(HG_Error_to_string(ret)));
-        }
-
-HG_Addr_free(m_hg_class, self_addr);
-
-        auto text_address = std::make_unique<char[]>(buf_size);
-
-        ret = HG_Addr_to_string(m_hg_class, text_address.get(), &buf_size, self_addr);
-
-        if(ret != HG_SUCCESS) {
-            throw std::runtime_error("Failed to compute address length " +
-                                     std::string(HG_Error_to_string(ret)));
-        }
-
-        INFO("Self address: {}", text_address.get());
-
-        DEBUG2("    m_hg_class: {}", static_cast<void*>(m_hg_class));
-
-        DEBUG("  Creating context");
-        m_hg_context = HG_Context_create(m_hg_class);
-
-        if(m_hg_context == NULL) {
-            throw std::runtime_error("Failed to create Mercury context");
-        }
-
-        DEBUG2("    m_hg_context: {}", static_cast<void*>(m_hg_context));
-
-        DEBUG("  Registering RPCs");
+        DEBUG("Registering RPCs");
         register_rpcs();
     }
 
@@ -157,6 +108,10 @@ HG_Addr_free(m_hg_class, self_addr);
      * Destroy the Mercury asynchronous engine.
      */
     ~async_engine() {
+
+        // we need to release the hg_addr_t contained in m_self_address
+        // so that HG_Context_destroy() and HG_Finalize() work as expected
+        m_self_address.reset();
 
         DEBUG("Destroying Mercury asynchronous engine");
         DEBUG("  Stopping runners");
@@ -170,7 +125,7 @@ HG_Addr_free(m_hg_class, self_addr);
         DEBUG("  Cleaning address cache");
         {
             std::lock_guard<std::mutex> lock(m_addr_cache_mutex);
-            m_addr_cache.clear();
+            m_address_cache.clear();
         }
 
         if(m_hg_context != NULL) {
@@ -227,25 +182,30 @@ HG_Addr_free(m_hg_class, self_addr);
     }
 
     endpoint
-    lookup(const std::string& name,
-           std::size_t port) const {
+    lookup(const std::string& addr) const {
 
-        /*const */auto address = make_address(name, port);
+        DEBUG("Looking up endpoint \"{}\"", addr);
+
+        // address does not contain a prefix
+        if(addr.find("://") != std::string::npos) {
+            throw std::runtime_error("Explicit specification of transport "
+                                     "protocol in addresses is not supported.");
+        }
+
+        const std::string transport_address(
+                get_transport_lookup_prefix(m_transport) + addr);
 
         {
             std::lock_guard<std::mutex> lock(m_addr_cache_mutex);
 
-            const auto it = m_addr_cache.find(address);
+            const auto it = m_address_cache.find(transport_address);
 
-            if(it != m_addr_cache.end()) {
-                DEBUG("Endpoint \"{}\" cached {}", address, fmt::ptr(it->second.get()));
-                return endpoint(name, port, it->second);
+            if(it != m_address_cache.end()) {
+                DEBUG("Endpoint \"{}\" cached {}", 
+                      addr, fmt::ptr(it->second.get()));
+                return endpoint(it->second);
             }
         }
-
-        address = "ofi+sockets://fi_sockaddr_in://127.0.0.1:22222";
-
-        DEBUG("Looking up endpoint \"{}\"", address);
 
         assert(m_hg_class);
         assert(m_hg_context);
@@ -274,9 +234,13 @@ HG_Addr_free(m_hg_class, self_addr);
             //static_cast<void*>(ctx.get()),
             static_cast<void*>(&ctx),
             // name to lookup
-            address.c_str(),
+            transport_address.c_str(),
             // pointer to returned operation ID
             HG_OP_ID_IGNORE);
+
+        DEBUG2("HG_Addr_lookup({}, {}, {}, {}, HG_OP_ID_IGNORE) = {}", 
+               fmt::ptr(m_hg_context), "foo", fmt::ptr(&ctx), 
+               transport_address, HG_Error_to_string(ret));
 
         if(ret != HG_SUCCESS) {
             throw std::runtime_error("Failed to lookup target");
@@ -294,27 +258,24 @@ HG_Addr_free(m_hg_class, self_addr);
               fmt::ptr(ctx.m_hg_addr));
 
         
-        std::pair<decltype(m_addr_cache)::iterator, bool> rv;
+        std::pair<decltype(m_address_cache)::iterator, bool> rv;
 
         {
             std::lock_guard<std::mutex> lock(m_addr_cache_mutex);
-            rv = m_addr_cache.emplace(
-                    address,
+            rv = m_address_cache.emplace(
+                    addr,
                     std::make_shared<detail::address>(
                         m_hg_class, ctx.m_hg_addr));
         }
 
-        return endpoint(name, port, rv.first->second);
+        return endpoint(rv.first->second);
     }
 
     endpoint_set
-    lookup(std::initializer_list<
-              std::pair<const std::string, const std::size_t>>&& addrs) const {
+    lookup(std::initializer_list<std::string>&& addrs) const {
 
 
-        std::set<
-            std::pair<const std::string, const std::size_t> 
-            > unique_addrs(addrs);
+        std::set<std::string> unique_addrs(addrs);
 
         endpoint_set endps;
 
@@ -322,7 +283,7 @@ HG_Addr_free(m_hg_class, self_addr);
         // all lookups are posted to mercury and we only wait once on
         // total completion
         for(const auto addr : unique_addrs) {
-            endps.emplace_back(lookup(addr.first, addr.second));
+            endps.emplace_back(lookup(addr));
         }
 
         return endps;
@@ -378,7 +339,7 @@ HG_Addr_free(m_hg_class, self_addr);
         using Input = typename Request::input_type;
         using Handle = typename Request::handle_type;
 
-        DEBUG2("Posting RPC to single endpoint");
+        DEBUG2("Posting RPC to endpoint {}", target.address()->to_string());
 
         auto handle = Handle(m_hg_context, 
                              {target.address()},
@@ -389,6 +350,9 @@ HG_Addr_free(m_hg_class, self_addr);
         hg_return ret = detail::post_to_mercury(ctx.get());
 
         if(ret != HG_SUCCESS) {
+
+            ctx->m_status = detail::request_status::failed;
+
             throw std::runtime_error("Failed to post RPC: " + 
                     std::string(HG_Error_to_string(ret)));
         }
@@ -429,7 +393,12 @@ HG_Addr_free(m_hg_class, self_addr);
 
             // if this submission fails, cancel all previously posted RPCs
             if(ret != HG_SUCCESS) {
+
+                ctx->m_status = detail::request_status::cancelled;
+
                 for(std::size_t j = 0; j < i; ++j) {
+
+
                     ret = HG_Cancel(handle.m_ctxs[i]->m_handle);
 
                     if(ret != HG_SUCCESS) {
@@ -437,7 +406,6 @@ HG_Addr_free(m_hg_class, self_addr);
                                 HG_Error_to_string(ret));
                     }
 
-                    ctx->m_status = detail::request_status::timeout;
                 }
 
                 throw std::runtime_error("Failed to post RPC: " + 
@@ -535,16 +503,6 @@ HG_Addr_free(m_hg_class, self_addr);
     }
 
 private:
-    std::string
-    make_address(const std::string& target_name, 
-                 const std::size_t target_port) const {
-        return std::string(m_transport_prefix) +
-                           target_name +
-                           std::string(":") +
-                           std::to_string(target_port);
-    }
-
-private:
     /**
      * Register RPCs into Mercury so that they can be called by the clients 
      * of the asynchronous engine
@@ -617,12 +575,13 @@ private:
     hg_context_t* m_hg_context;
     bool m_listen;
     const transport m_transport;
-    const char* const m_transport_prefix;
+    std::unique_ptr<detail::address> m_self_address;
     std::thread m_runner;
 
     mutable std::mutex m_addr_cache_mutex;
-    mutable std::unordered_map<std::string, 
-                               std::shared_ptr<detail::address>> m_addr_cache;
+    mutable std::unordered_map<
+        std::string, 
+        std::shared_ptr<detail::address>> m_address_cache;
 }; // class async_engine
 
 } // namespace hermes

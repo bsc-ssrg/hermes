@@ -7,6 +7,9 @@
 // C++ includes
 #include <functional>
 
+// project includes
+#include <hermes/logging.hpp>
+
 namespace hermes {
 
 // defined in this file

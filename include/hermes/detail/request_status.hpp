@@ -6,6 +6,7 @@ namespace detail {
 
 enum class request_status {
     created,
+    failed,
     timeout,
     cancelled
 };

@@ -7,6 +7,7 @@
 
 // hermes includes
 #include <hermes/detail/request_descriptor.hpp>
+#include <hermes/logging.hpp>
 
 namespace hermes {
 namespace detail {

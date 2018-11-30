@@ -77,7 +77,7 @@ set_debug_output_level(unsigned int level) {
     
 #define ERROR(...) \
     do { \
-        fmt::print(stderr, "ERROR: " __VA_ARGS__); \
+        fmt::print(stderr, "ERROR: {}\n", fmt::format(__VA_ARGS__)); \
     } while(0);
 
 

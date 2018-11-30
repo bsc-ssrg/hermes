@@ -1,0 +1,9 @@
+find_package(Sanitizers)
+
+add_executable(00_hello_world_client client.cpp)
+add_sanitizers(00_hello_world_client)
+target_link_libraries(00_hello_world_client hermes)
+
+add_executable(00_hello_world_server server.cpp)
+add_sanitizers(00_hello_world_server)
+target_link_libraries(00_hello_world_server hermes)
