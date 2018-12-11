@@ -95,6 +95,7 @@ set_debug_output_level(unsigned int level) {
 #define DEBUG(...)
 #define DEBUG2(...)
 #define DEBUG3(...)
+#define DEBUG4(...)
 #define ERROR(...)
 #define FATAL(...)
 

@@ -87,7 +87,7 @@ private:
     map_t m_request_types;
 };
 
-request_registrar<uint16_t, request_descriptor_base>&
+static request_registrar<uint16_t, request_descriptor_base>&
 registered_requests() {
     return request_registrar<uint16_t, request_descriptor_base>::singleton();
 }

@@ -1,6 +1,8 @@
 #ifndef __HERMES_MAKE_UNIQUE_HPP__
 #define __HERMES_MAKE_UNIQUE_HPP__
 
+#ifndef HERMES_DISABLE_INTERNAL_MAKE_UNIQUE
+
 #include <memory>
 
 #if __cplusplus != 201103L
@@ -42,5 +44,7 @@ namespace std {
         typename _Unique_if<T>::_Known_bound
         make_unique(Args&&...) = delete;
 }
+
+#endif // HERMES_DISABLE_INTERNAL_MAKE_UNIQUE
 
 #endif // __HERMES_MAKE_UNIQUE_HPP__
