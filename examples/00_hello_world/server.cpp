@@ -139,7 +139,7 @@ main(int argc, char* argv[]) {
         std::cout << "Shutting down\n";
     } 
     catch(const std::exception& ex) {
-        ERROR("{}", ex.what());
+        std::cerr << "ERROR: " << ex.what() << "\n";
     }
 
     return 0;

@@ -134,8 +134,8 @@ public:
 
             if(err != HG_SUCCESS) {
                 // can't throw here
-                ERROR("Failed to destroy context: {}\n",
-                      HG_Error_to_string(err));
+                HERMES_ERROR("Failed to destroy context: {}\n",
+                             HG_Error_to_string(err));
             }
         }
 
@@ -145,8 +145,8 @@ public:
 
             if(err != HG_SUCCESS) {
                 // can't throw here
-                ERROR("Failed to shut down transport layer: {}\n",
-                      HG_Error_to_string(err));
+                HERMES_ERROR("Failed to shut down transport layer: {}\n",
+                             HG_Error_to_string(err));
             }
         }
     }
@@ -567,8 +567,8 @@ private:
                               HG_Error_to_string(ret));
 
                 if(ret != HG_SUCCESS && ret != HG_TIMEOUT) {
-                    FATAL("Unexpected return code {} from HG_Progress: {}",
-                          ret, HG_Error_to_string(ret));
+                    HERMES_FATAL("Unexpected return code {} from HG_Progress: "
+                                 "{}", ret, HG_Error_to_string(ret));
                 }
             }
         }
