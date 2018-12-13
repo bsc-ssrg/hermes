@@ -118,8 +118,8 @@ struct request_descriptor : public request_descriptor_base {
     void
     set_user_handler(Callable&& handler) {
 
-        DEBUG2("Setting user handler for requests of type \"{}\"", 
-               std::string(name));
+        HERMES_DEBUG2("Setting user handler for requests of type \"{}\"", 
+                      std::string(name));
         m_user_handler = std::forward<Callable>(handler);
     }
 

@@ -67,7 +67,7 @@ class rpc_handle {
         m_futures.reserve(targets.size());
 
         for(auto&& addr : targets) {
-            DEBUG2("Creating execution_context for RPC");
+            HERMES_DEBUG2("Creating execution_context for RPC");
 
             m_ctxs.emplace_back(
                 std::make_unique<ExecutionContext>(
@@ -76,7 +76,7 @@ class rpc_handle {
                     addr, 
                     std::forward<InputData>(input)));
 
-            DEBUG2("Creating future for RPC");
+            HERMES_DEBUG2("Creating future for RPC");
 
             m_futures.emplace_back(
                     m_ctxs.back()->m_output_promise.get_future());
@@ -90,7 +90,7 @@ public:
     rpc_handle& operator=(rpc_handle&&) = default;
 
     ~rpc_handle() {
-        DEBUG2("{}()", __func__);
+        HERMES_DEBUG2("{}()", __func__);
 
         if(Request::requires_response) {
             (void) get();
@@ -107,7 +107,7 @@ public:
 
         assert(m_futures.size() == m_ctxs.size());
 
-        DEBUG("Getting RPC results (pending: {})", m_futures.size());
+        HERMES_DEBUG("Getting RPC results (pending: {})", m_futures.size());
 
         constexpr const auto TIMEOUT = std::chrono::seconds(1);
         constexpr const auto RETRIES = 5;
@@ -142,13 +142,13 @@ public:
                                     detail::request_status::timeout :
                                     detail::request_status::cancelled);
 
-                        DEBUG2("Mercury request timed out, {}",
-                                m_ctxs[i]->m_status == 
-                                    detail::request_status::timeout ?
-                                fmt::format("reposting request ({} of {})", 
-                                    RETRIES - retries[i], RETRIES) :
-                                "cancelling");
-
+                        HERMES_DEBUG2("Mercury request timed out, {}",
+                                      m_ctxs[i]->m_status == 
+                                          detail::request_status::timeout ?
+                                          fmt::format(
+                                              "reposting request ({} of {})", 
+                                              RETRIES - retries[i], RETRIES) :
+                                          "cancelling");
 
                         // cancel the pending Mercury request, this causes
                         // its completion callback to be invoked and we can
@@ -158,8 +158,8 @@ public:
                         hg_return_t ret = HG_Cancel(m_ctxs[i]->m_handle);
 
                         if(ret != HG_SUCCESS) {
-                            WARNING("Failed to cancel RPC: {}", 
-                                    HG_Error_to_string(ret));
+                            HERMES_WARNING("Failed to cancel RPC: {}", 
+                                           HG_Error_to_string(ret));
                         }
                         break;
                     }
@@ -168,7 +168,7 @@ public:
                     {
                         // the request "completed", i.e. we can retrieve either
                         // a valid result or an error condition
-                        DEBUG2("RPC completed. Retrieving result.");
+                        HERMES_DEBUG2("RPC completed. Retrieving result.");
                         result_set.emplace_back(m_futures[i].get());
                         retrieved[i] = true;
                         --pending_requests;
@@ -177,7 +177,8 @@ public:
 
                     default:
                     {
-                        DEBUG2("RPC future is in an inconsistent state. Aborting.");
+                        HERMES_DEBUG2("RPC future is in an inconsistent state. "
+                                      "Aborting.");
                         throw std::runtime_error("Unexpected future_status in "
                                                  "wait_for()");
                     }

@@ -17,32 +17,32 @@ set_debug_output_level(unsigned int level) {
 }
 } // namespace logging
 
-#define INFO(...) \
+#define HERMES_INFO(...) \
     do { \
         fmt::print(stdout, "INFO: {}\n", fmt::format(__VA_ARGS__)); \
     } while(0);
 
 
-#define WARNING(...) \
+#define HERMES_WARNING(...) \
     do { \
         fmt::print(stdout, "WARNING: {}\n", fmt::format(__VA_ARGS__)); \
     } while(0);
 
 
-#ifdef HERMES_DEBUG
+#ifdef HERMES_DEBUG_BUILD
 
-#define DEBUG(...) \
+#define HERMES_DEBUG(...) \
     DEBUG_HELPER(1u, __VA_ARGS__);
 
 
-#define DEBUG2(...) \
+#define HERMES_DEBUG2(...) \
     DEBUG_HELPER(2u, __VA_ARGS__);
 
 
-#define DEBUG3(...) \
+#define HERMES_DEBUG3(...) \
     DEBUG_HELPER(3u, __VA_ARGS__);
 
-#define DEBUG4(...) \
+#define HERMES_DEBUG4(...) \
     DEBUG_HELPER(4u, __VA_ARGS__);
 
 #define DEBUG_HELPER(level, ...)                                            \
@@ -57,20 +57,20 @@ set_debug_output_level(unsigned int level) {
 
 #else // ! HERMES_DEBUG
 
-#define DEBUG(...)  \
+#define HERMES_DEBUG(...)  \
     do {            \
     } while(0); 
 
 
-#define DEBUG2(...)     \
-    DEBUG(__VA_ARGS__)
+#define HERMES_DEBUG2(...)     \
+    HERMES_DEBUG(__VA_ARGS__)
 
 
-#define DEBUG3(...)     \
-    DEBUG(__VA_ARGS__)
+#define HERMES_DEBUG3(...)     \
+    HERMES_DEBUG(__VA_ARGS__)
 
-#define DEBUG4(...)     \
-    DEBUG(__VA_ARGS__)
+#define HERMES_DEBUG4(...)     \
+    HERMES_DEBUG(__VA_ARGS__)
 
 #endif
 
@@ -90,12 +90,12 @@ set_debug_output_level(unsigned int level) {
 
 #else // ! HAVE_FMT
 
-#define INFO(...)
-#define WARNING(...)
-#define DEBUG(...)
-#define DEBUG2(...)
-#define DEBUG3(...)
-#define DEBUG4(...)
+#define HERMES_INFO(...)
+#define HERMES_WARNING(...)
+#define HERMES_DEBUG(...)
+#define HERMES_DEBUG2(...)
+#define HERMES_DEBUG3(...)
+#define HERMES_DEBUG4(...)
 #define ERROR(...)
 #define FATAL(...)
 

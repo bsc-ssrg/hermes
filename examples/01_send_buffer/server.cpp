@@ -108,6 +108,8 @@ main(int argc, char* argv[]) {
                 hermes::exposed_memory local_buffers =
                     hg.expose(bufseq, hermes::access_mode::write_only);
 
+                sleep(120);
+
                 std::cout << "  Pulling remote buffers\n";
 
                 // this lambda will be invoked when the pull transfer completes

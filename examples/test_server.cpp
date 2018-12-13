@@ -19,9 +19,9 @@ std::atomic<bool> shutdown_requested(false);
 void
 shutdown_handler(hermes::request<example_rpcs::shutdown>&& req) {
 
-    INFO("RPC received:");
-    INFO("    type: shutdown"); 
-    INFO("    requires_response?: {}", req.requires_response()); 
+    HERMES_INFO("RPC received:");
+    HERMES_INFO("    type: shutdown"); 
+    HERMES_INFO("    requires_response?: {}", req.requires_response()); 
 
     bool expected = false;
     while(!shutdown_requested.compare_exchange_weak(expected, true) 
@@ -33,20 +33,20 @@ send_file_handler(hermes::request<example_rpcs::send_file>&& req) {
 
     example_rpcs::send_file::input args = req.args();
 
-    INFO("RPC received:");
-    INFO("    type: send_message,"); 
-    INFO("    args: \"{}\"", args.pathname());
+    HERMES_INFO("RPC received:");
+    HERMES_INFO("    type: send_message,"); 
+    HERMES_INFO("    args: \"{}\"", args.pathname());
 
     // hermes::send_file_out_t out;
     // out.ret_val = 42;
 
-    INFO("Callback invoked: {}(\"{}\") = {}!", 
+    HERMES_INFO("Callback invoked: {}(\"{}\") = {}!", 
          __FUNCTION__, args.pathname(), "?");
 
 #if 0
     if(req.requires_response()) {
         m_hg.respond<example_rpcs::send_file>(std::move(req), 0);
-        INFO("  Response sent with value {}", 0);
+        HERMES_INFO("  Response sent with value {}", 0);
     }
 #endif
 }
@@ -63,9 +63,9 @@ struct example_class {
 
         example_rpcs::send_message::input args = req.args();
 
-        INFO("RPC received:");
-        INFO("    type: send_message,"); 
-        INFO("    args: \"{}\"", args.message());
+        HERMES_INFO("RPC received:");
+        HERMES_INFO("    type: send_message,"); 
+        HERMES_INFO("    args: \"{}\"", args.message());
 
         if(req.requires_response()) {
             /*******************************************************************
@@ -79,7 +79,7 @@ struct example_class {
              *                  hermes::send_message_retval{42});
              ******************************************************************/
             m_hg.respond<example_rpcs::send_message>(std::move(req), 0);
-            INFO("  Response sent with value {}", 0);
+            HERMES_INFO("  Response sent with value {}", 0);
         }
     }
 
@@ -104,9 +104,9 @@ main(int argc, char* argv[]) {
 
                 hermes::exposed_memory remote_buffers = args.buffers();
 
-                INFO("RPC received:");
-                INFO("    type: send_buffer,"); 
-                INFO("    args: remote_buffers{{count={}, total_size={}}}", 
+                HERMES_INFO("RPC received:");
+                HERMES_INFO("    type: send_buffer,"); 
+                HERMES_INFO("    args: remote_buffers{{count={}, total_size={}}}", 
                         remote_buffers.count(), remote_buffers.size());
 
                 // let's prepare some local buffers
@@ -122,7 +122,7 @@ main(int argc, char* argv[]) {
                 hermes::exposed_memory local_buffers =
                     hg.expose(bufseq, hermes::access_mode::write_only);
 
-                INFO("  Pulling remote buffers");
+                HERMES_INFO("  Pulling remote buffers");
 
                 // this lambda will be invoked when the pull transfer completes
                 // (we capture bufvec by reference to verify that remote data
@@ -131,21 +131,21 @@ main(int argc, char* argv[]) {
                 const auto do_pull_completion = [bufseq, &hg](
                         hermes::request<example_rpcs::send_buffer>&& req) {
 
-                    INFO("    Pull successful!");
+                    HERMES_INFO("    Pull successful!");
 
                     for(auto&& buf : bufseq) {
-                        INFO("      Buffer size: {}", buf.size());
-                        // INFO("      Buffer contents: {}", 
+                        HERMES_INFO("      Buffer size: {}", buf.size());
+                        // HERMES_INFO("      Buffer contents: {}", 
                         //         reinterpret_cast<char*>(buf.data()));
-                        INFO("      Initial buffer contents: \"{}\"", 
+                        HERMES_INFO("      Initial buffer contents: \"{}\"", 
                                 std::string(reinterpret_cast<char*>(buf.data()), 50));
                     }
 
                     if(req.requires_response()) {
-                        INFO("  Sending response...");
+                        HERMES_INFO("  Sending response...");
                         example_rpcs::send_buffer::output rv(42);
                         hg.respond<example_rpcs::send_buffer>(std::move(req), rv);
-                        INFO("  Response sent with value {}", rv.retval());
+                        HERMES_INFO("  Response sent with value {}", rv.retval());
                     }
                 };
 
@@ -173,7 +173,7 @@ main(int argc, char* argv[]) {
             sleep(1);
         }
 
-        INFO("Shutting down");
+        HERMES_INFO("Shutting down");
     } 
     catch(const std::exception& ex) {
         ERROR("{}", ex.what());

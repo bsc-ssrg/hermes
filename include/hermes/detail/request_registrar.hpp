@@ -23,7 +23,7 @@ public:
     static request_registrar<Key, Value>& 
     singleton() {
 
-#ifdef HERMES_DEBUG
+#ifdef HERMES_DEBUG_BUILD
         char* v = getenv("HERMES_LOG_LEVEL");
 
         if(v != NULL) {
@@ -45,7 +45,7 @@ public:
         constexpr const auto mercury_in_proc_cb = Request::mercury_in_proc_cb;
         constexpr const auto mercury_out_proc_cb = Request::mercury_out_proc_cb;
 
-        DEBUG2("Adding new request type (id={}, name={})", id, name);
+        HERMES_DEBUG2("Adding new request type (id={}, name={})", id, name);
 
         if(m_request_types.count(id) != 0) {
             throw std::runtime_error("Failed to add request type: duplicate id");
@@ -62,7 +62,7 @@ public:
     std::shared_ptr<request_descriptor_base>
     at(uint16_t id) const {
 
-        DEBUG2("Fetching request descriptor for request type [{}]", id);
+        HERMES_DEBUG2("Fetching request descriptor for request type [{}]", id);
 
         const auto it = m_request_types.find(id);
 

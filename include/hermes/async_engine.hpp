@@ -86,21 +86,21 @@ public:
                         bind_address, 
                         m_listen);
 
-        DEBUG2("m_hg_class: {}", static_cast<void*>(m_hg_class));
+        HERMES_DEBUG2("m_hg_class: {}", static_cast<void*>(m_hg_class));
 
         m_hg_context = detail::create_mercury_context(m_hg_class);
 
-        DEBUG2("m_hg_context: {}", static_cast<void*>(m_hg_context));
+        HERMES_DEBUG2("m_hg_context: {}", static_cast<void*>(m_hg_context));
 
         if(m_listen) {
             m_self_address = 
                 std::make_unique<detail::address>(
                     detail::address::self_address(m_hg_class));
 
-            DEBUG("Self address: {}", m_self_address->to_string());
+            HERMES_DEBUG("Self address: {}", m_self_address->to_string());
         }
 
-        DEBUG("Registering RPCs");
+        HERMES_DEBUG("Registering RPCs");
         register_rpcs();
     }
 
@@ -113,8 +113,8 @@ public:
         // so that HG_Context_destroy() and HG_Finalize() work as expected
         m_self_address.reset();
 
-        DEBUG("Destroying Mercury asynchronous engine");
-        DEBUG("  Stopping runners");
+        HERMES_DEBUG("Destroying Mercury asynchronous engine");
+        HERMES_DEBUG("  Stopping runners");
 
         m_shutdown = true;
 
@@ -122,14 +122,14 @@ public:
             m_runner.join();
         }
 
-        DEBUG("  Cleaning address cache");
+        HERMES_DEBUG("  Cleaning address cache");
         {
             std::lock_guard<std::mutex> lock(m_addr_cache_mutex);
             m_address_cache.clear();
         }
 
         if(m_hg_context != NULL) {
-            DEBUG("  Destroying context");
+            HERMES_DEBUG("  Destroying context");
             const auto err = HG_Context_destroy(m_hg_context);
 
             if(err != HG_SUCCESS) {
@@ -140,7 +140,7 @@ public:
         }
 
         if(m_hg_class != NULL) {
-            DEBUG("  Finalizing transport layer");
+            HERMES_DEBUG("  Finalizing transport layer");
             const auto err = HG_Finalize(m_hg_class);
 
             if(err != HG_SUCCESS) {
@@ -171,8 +171,9 @@ public:
                                   100);
 
                 if(ret != HG_SUCCESS && ret != HG_TIMEOUT) {
-                    WARNING("Unexpected return code {} from HG_Progress: {}",
-                            ret, HG_Error_to_string(ret));
+                    HERMES_WARNING("Unexpected return code {} from "
+                                   "HG_Progress: {}",
+                                   ret, HG_Error_to_string(ret));
                     return ret;
                 }
             }
@@ -184,7 +185,7 @@ public:
     endpoint
     lookup(const std::string& addr) const {
 
-        DEBUG("Looking up endpoint \"{}\"", addr);
+        HERMES_DEBUG("Looking up endpoint \"{}\"", addr);
 
         // address does not contain a prefix
         if(addr.find("://") != std::string::npos) {
@@ -201,8 +202,8 @@ public:
             const auto it = m_address_cache.find(transport_address);
 
             if(it != m_address_cache.end()) {
-                DEBUG("Endpoint \"{}\" cached {}", 
-                      addr, fmt::ptr(it->second.get()));
+                HERMES_DEBUG("Endpoint \"{}\" cached {}", 
+                             addr, fmt::ptr(it->second.get()));
                 return endpoint(it->second);
             }
         }
@@ -238,9 +239,9 @@ public:
             // pointer to returned operation ID
             HG_OP_ID_IGNORE);
 
-        DEBUG2("HG_Addr_lookup({}, {}, {}, {}, HG_OP_ID_IGNORE) = {}", 
-               fmt::ptr(m_hg_context), "foo", fmt::ptr(&ctx), 
-               transport_address, HG_Error_to_string(ret));
+        HERMES_DEBUG2("HG_Addr_lookup({}, {}, {}, {}, HG_OP_ID_IGNORE) = {}", 
+                      fmt::ptr(m_hg_context), "foo", fmt::ptr(&ctx), 
+                      transport_address, HG_Error_to_string(ret));
 
         if(ret != HG_SUCCESS) {
             throw std::runtime_error("Failed to lookup target");
@@ -249,13 +250,13 @@ public:
         ret = wait_on(ctx);
 
         if(ret != HG_SUCCESS) {
-            DEBUG("Lookup request failed");
+            HERMES_DEBUG("Lookup request failed");
             throw std::runtime_error("Failed to lookup target");
         }
 
         assert(ctx.m_lookup_finished);
-        DEBUG("Lookup request succeeded [hg_addr: {}]",
-              fmt::ptr(ctx.m_hg_addr));
+        HERMES_DEBUG("Lookup request succeeded [hg_addr: {}]",
+                     fmt::ptr(ctx.m_hg_addr));
 
         
         std::pair<decltype(m_address_cache)::iterator, bool> rv;
@@ -311,7 +312,7 @@ public:
     void
     run() {
 
-        DEBUG("Starting Mercury asynchronous engine");
+        HERMES_DEBUG("Starting Mercury asynchronous engine");
 
         assert(m_hg_class);
         assert(m_hg_context);
@@ -339,7 +340,8 @@ public:
         using Input = typename Request::input_type;
         using Handle = typename Request::handle_type;
 
-        DEBUG2("Posting RPC to endpoint {}", target.address()->to_string());
+        HERMES_DEBUG2("Posting RPC to endpoint {}", 
+                      target.address()->to_string());
 
         auto handle = Handle(m_hg_context, 
                              {target.address()},
@@ -370,7 +372,7 @@ public:
         // using Output = typename Request::output_type;
         using Handle = typename Request::handle_type;
 
-        DEBUG2("Posting RPC to multiple endpoints");
+        HERMES_DEBUG2("Posting RPC to multiple endpoints");
 
         std::vector<std::shared_ptr<detail::address>> addrs;
         std::transform(targets.begin(), targets.end(),
@@ -402,8 +404,8 @@ public:
                     ret = HG_Cancel(handle.m_ctxs[i]->m_handle);
 
                     if(ret != HG_SUCCESS) {
-                        WARNING("Failed to cancel RPC: {}", 
-                                HG_Error_to_string(ret));
+                        HERMES_WARNING("Failed to cancel RPC: {}", 
+                                       HG_Error_to_string(ret));
                     }
 
                 }
@@ -446,7 +448,7 @@ public:
                 m_user_callback(user_callback) { }
 
             ~transfer_context() {
-                DEBUG("{}()", __func__);
+                HERMES_DEBUG("{}()", __func__);
             }
 
             request<Input> m_request;
@@ -466,7 +468,7 @@ public:
                 [](const struct hg_cb_info* cbi) -> hg_return_t {
 
                     if(cbi->ret != HG_SUCCESS) {
-                        DEBUG("Bulk transfer failed");
+                        HERMES_DEBUG("Bulk transfer failed");
                         return cbi->ret;
                     }
 
@@ -518,7 +520,7 @@ private:
             // auto&& id = kv.first;
             auto&& descriptor = kv.second;
 
-            DEBUG("**** registered: {}, {}, {}, {}, {}", 
+            HERMES_DEBUG("**** registered: {}, {}, {}, {}, {}", 
                     descriptor->m_id,
                     descriptor->m_mercury_id,
                     descriptor->m_name,
@@ -548,9 +550,10 @@ private:
                                  1,
                                  &actual_count);
 
-                DEBUG4("HG_Trigger(context={}, timeout={}, max_count={}, "
-                       "actual_count={}) = {}", fmt::ptr(m_hg_context), 0, 1,
-                       actual_count, HG_Error_to_string(ret));
+                HERMES_DEBUG4("HG_Trigger(context={}, timeout={}, "
+                              "max_count={}, actual_count={}) = {}", 
+                              fmt::ptr(m_hg_context), 0, 1, actual_count, 
+                              HG_Error_to_string(ret));
 
             } while((ret == HG_SUCCESS) &&
                     (actual_count != 0) &&
@@ -559,8 +562,9 @@ private:
             if(!m_shutdown) {
                 ret = HG_Progress(m_hg_context, 100);
 
-                DEBUG4("HG_Progress(context={}, timeout={}) = {}", 
-                       fmt::ptr(m_hg_context), 100, HG_Error_to_string(ret));
+                HERMES_DEBUG4("HG_Progress(context={}, timeout={}) = {}", 
+                              fmt::ptr(m_hg_context), 100, 
+                              HG_Error_to_string(ret));
 
                 if(ret != HG_SUCCESS && ret != HG_TIMEOUT) {
                     FATAL("Unexpected return code {} from HG_Progress: {}",

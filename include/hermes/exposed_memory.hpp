@@ -136,7 +136,7 @@ public:
     /** Converts between a Mercury bulk handle and a exposed_memory object */
     explicit exposed_memory(hg_bulk_t bulk_handle) { 
 
-        DEBUG("Converting hg_bulk_t to hermes::exposed_memory");
+        HERMES_DEBUG("Converting hg_bulk_t to hermes::exposed_memory");
 
         hg_uint32_t bulk_count = HG_Bulk_get_segment_count(bulk_handle);
         hg_size_t bulk_size = HG_Bulk_get_size(bulk_handle);
@@ -169,20 +169,21 @@ public:
 
         assert(bulk_count == actual_count);
 
-        DEBUG2("HG_Bulk_access(handle={}, offset={}, size={}, flags={}, "
-               "max_count={}, buf_ptrs={}, buf_sizes={}, actual_count={}) = {}",
-               fmt::ptr(bulk_handle), 0, bulk_size, "HG_BULK_READ_ONLY",
-               bulk_count, fmt::ptr(ptrs), fmt::ptr(sizes),
-               fmt::ptr(&actual_count), ret);
+        HERMES_DEBUG2("HG_Bulk_access(handle={}, offset={}, size={}, flags={}, "
+                      "max_count={}, buf_ptrs={}, buf_sizes={}, "
+                      "actual_count={}) = {}",
+                      fmt::ptr(bulk_handle), 0, bulk_size, "HG_BULK_READ_ONLY",
+                      bulk_count, fmt::ptr(ptrs), fmt::ptr(sizes),
+                      fmt::ptr(&actual_count), ret);
 
         m_buffers.reserve(bulk_count);
 
-        DEBUG2("Bulk segments found: {{");
+        HERMES_DEBUG2("Bulk segments found: {{");
         for(std::size_t i = 0; i < bulk_count; ++i) {
-            DEBUG2("  [addr: {}, size: {}]", ptrs[i], sizes[i]);
+            HERMES_DEBUG2("  [addr: {}, size: {}]", ptrs[i], sizes[i]);
             m_buffers.emplace_back(ptrs[i], sizes[i]);
         }
-        DEBUG2("}}");
+        HERMES_DEBUG2("}}");
 
         ///XXX ???? m_hg_class = hg_class;
         m_mode = access_mode::read_only,

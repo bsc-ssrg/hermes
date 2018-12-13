@@ -33,14 +33,14 @@ initialize_mercury(const std::string& transport_prefix,
         address += bind_address;
     }
 
-    DEBUG("Initializing Mercury transport layer (address: {})", address);
+    HERMES_DEBUG("Initializing Mercury transport layer (address: {})", address);
 
     hg_class_t* hg_class = 
         HG_Init(address.c_str(),
                 listen ? HG_TRUE : HG_FALSE);
 
-    DEBUG2("HG_Init({}, {}) = {}", 
-           address, listen ? "HG_TRUE" : "HG_FALSE", fmt::ptr(hg_class));
+    HERMES_DEBUG2("HG_Init({}, {}) = {}", 
+                  address, listen ? "HG_TRUE" : "HG_FALSE", fmt::ptr(hg_class));
 
     if(hg_class == NULL) {
         throw std::runtime_error("Failed to initialize Mercury");
@@ -52,12 +52,12 @@ initialize_mercury(const std::string& transport_prefix,
 inline hg_context_t*
 create_mercury_context(hg_class_t* hg_class) {
 
-    DEBUG("Creating Mercury execution context");
+    HERMES_DEBUG("Creating Mercury execution context");
 
     hg_context_t* hg_context = HG_Context_create(hg_class);
 
-    DEBUG2("HG_Context_create({}) = {}", 
-           fmt::ptr(hg_class), fmt::ptr(hg_context));
+    HERMES_DEBUG2("HG_Context_create({}) = {}", 
+                  fmt::ptr(hg_class), fmt::ptr(hg_context));
 
     if(hg_context == NULL) {
         throw std::runtime_error("Failed to create Mercury context");
@@ -117,14 +117,14 @@ register_mercury_rpc(hg_class_t* hg_class,
                                     descriptor->m_handler : 
                                     nullptr);
 
-    DEBUG2("    HG_Register(hg_class={}, hg_id={}, in_proc_cb={}, "
-                            "out_proc_cb={}, rpc_cb={}) = {}",
-            static_cast<void*>(hg_class), 
-            descriptor->m_mercury_id,
-            reinterpret_cast<void*>(descriptor->m_mercury_input_cb),
-            reinterpret_cast<void*>(descriptor->m_mercury_output_cb),
-            (listen ? (void*)(descriptor->m_handler) : nullptr),
-            ret);
+    HERMES_DEBUG2("    HG_Register(hg_class={}, hg_id={}, in_proc_cb={}, "
+                  "out_proc_cb={}, rpc_cb={}) = {}",
+                  static_cast<void*>(hg_class), 
+                  descriptor->m_mercury_id,
+                  reinterpret_cast<void*>(descriptor->m_mercury_input_cb),
+                  reinterpret_cast<void*>(descriptor->m_mercury_output_cb),
+                  (listen ? (void*)(descriptor->m_handler) : nullptr),
+                  ret);
 
     if(ret != HG_SUCCESS) {
         throw std::runtime_error("Failed to register RPC '" +
@@ -149,7 +149,7 @@ create_mercury_handle(const hg_context_t* hg_context,
                       const hg_addr_t hg_addr,
                       const hg_id_t hg_id) {
 
-    DEBUG("Creating Mercury handle");
+    HERMES_DEBUG("Creating Mercury handle");
 
     hg_handle_t handle = HG_HANDLE_NULL;
 
@@ -163,9 +163,9 @@ create_mercury_handle(const hg_context_t* hg_context,
                 // pointer to HG handle
                 &handle);
 
-    DEBUG2("HG_Create(hg_context={}, addr={}, hg_id={}, hg_handle={}) = {}",
-            fmt::ptr(hg_context), fmt::ptr(&hg_addr),
-            hg_id, fmt::ptr(&handle), ret);
+    HERMES_DEBUG2("HG_Create(hg_context={}, addr={}, hg_id={}, hg_handle={}) "
+                  "= {}", fmt::ptr(hg_context), fmt::ptr(&hg_addr), hg_id, 
+                  fmt::ptr(&handle), ret);
 
     if(ret != HG_SUCCESS) {
         throw std::runtime_error(
@@ -183,7 +183,7 @@ create_mercury_bulk_handle(hg_class_t* hg_class,
                            const hg_size_t* buf_sizes,
                            const hg_uint8_t flags) {
 
-    DEBUG("Creating Mercury bulk handle");
+    HERMES_DEBUG("Creating Mercury bulk handle");
 
     hg_bulk_t bulk_handle = HG_BULK_NULL;
 
@@ -201,10 +201,10 @@ create_mercury_bulk_handle(hg_class_t* hg_class,
                     // pointer to returned bulk handle
                     &bulk_handle);
 
-    DEBUG2("HG_Bulk_create(hg_class={}, count={}, buf_ptrs={}, buf_sizes={}, "
-           "flags={}, handle={}) = {}", fmt::ptr(hg_class), buf_count,
-           fmt::ptr(buf_ptrs), fmt::ptr(buf_sizes), flags,
-           fmt::ptr(&bulk_handle), ret);
+    HERMES_DEBUG2("HG_Bulk_create(hg_class={}, count={}, buf_ptrs={}, "
+                  "buf_sizes={}, flags={}, handle={}) = {}", 
+                  fmt::ptr(hg_class), buf_count, fmt::ptr(buf_ptrs), 
+                  fmt::ptr(buf_sizes), flags, fmt::ptr(&bulk_handle), ret);
 
     if(ret != HG_SUCCESS) {
         throw std::runtime_error("Failed to create bulk handle: " + 
@@ -284,7 +284,7 @@ post_to_mercury(ExecutionContext* ctx) {
     // using RequestInput = typename Request::input_type;
     using RequestOutput = typename Request::output_type;
 
-    DEBUG("Sending request");
+    HERMES_DEBUG("Sending request");
 
     const auto completion_callback = 
         [](const struct hg_cb_info* cbi) -> hg_return_t {
@@ -295,13 +295,13 @@ post_to_mercury(ExecutionContext* ctx) {
             switch(ctx->m_status) {
                 case request_status::timeout: 
                 {
-                    DEBUG2("Request timed out, reposting");
+                    HERMES_DEBUG2("Request timed out, reposting");
                     // repost the request
                     hg_return ret = post_to_mercury<ExecutionContext>(ctx);
 
                     if(ret != HG_SUCCESS) {
-                        DEBUG2("Failed to repost request: {}", 
-                                HG_Error_to_string(ret));
+                        HERMES_DEBUG2("Failed to repost request: {}", 
+                                      HG_Error_to_string(ret));
 
                         ctx->m_output_promise.set_exception(
                             std::make_exception_ptr(
@@ -320,7 +320,7 @@ post_to_mercury(ExecutionContext* ctx) {
                     // and we exhausted the configured retries
                     // The only option is to definitely cancel the request and
                     // set an exception for the user
-                    DEBUG2("Request was cancelled");
+                    HERMES_DEBUG2("Request was cancelled");
 
                     ctx->m_output_promise.set_exception(
                             std::make_exception_ptr(
@@ -333,7 +333,7 @@ post_to_mercury(ExecutionContext* ctx) {
                 }
 
                 default:
-                    DEBUG2("Request is in an inconsistent state");
+                    HERMES_DEBUG2("Request is in an inconsistent state");
                     ctx->m_output_promise.set_exception(
                             std::make_exception_ptr(
                                 std::runtime_error("Request is in an "
@@ -348,7 +348,8 @@ post_to_mercury(ExecutionContext* ctx) {
         }
 
         if(cbi->ret != HG_SUCCESS) {
-            DEBUG("Forward request failed: {}", HG_Error_to_string(cbi->ret));
+            HERMES_DEBUG("Forward request failed: {}", 
+                         HG_Error_to_string(cbi->ret));
 
             ctx->m_output_promise.set_exception(
                     std::make_exception_ptr(
@@ -363,7 +364,7 @@ post_to_mercury(ExecutionContext* ctx) {
         }
 
         if(Request::requires_response) {
-            DEBUG2("Decoding RPC output and setting promise");
+            HERMES_DEBUG2("Decoding RPC output and setting promise");
 
             MercuryOutput hg_output = 
                 detail::decode_mercury_output<Request>(
@@ -403,12 +404,12 @@ post_to_mercury(ExecutionContext* ctx) {
             // pointer to input structure
             &ctx->m_mercury_input);
 
-    DEBUG2("HG_Forward(handle={}, cb={}, arg={}, input={}) = {}",
-            fmt::ptr(ctx->m_handle), 
-            "lambda::completion_callback",
-            fmt::ptr(ctx), 
-            fmt::ptr(&ctx->m_mercury_input), 
-            HG_Error_to_string(ret));
+    HERMES_DEBUG2("HG_Forward(handle={}, cb={}, arg={}, input={}) = {}",
+                  fmt::ptr(ctx->m_handle), 
+                  "lambda::completion_callback",
+                  fmt::ptr(ctx), 
+                  fmt::ptr(&ctx->m_mercury_input), 
+                  HG_Error_to_string(ret));
 
     return ret;
 }
@@ -459,13 +460,13 @@ mercury_bulk_transfer(hg_handle_t handle,
             // pointer to returned operation ID
             HG_OP_ID_IGNORE);
 
-    DEBUG2("HG_Bulk_transfer(hg_context={}, callback={}, arg={}, op={}, "
-            "addr={}, origin_handle={}, origin_offset={}, local_handle={}, "
-            "local_offset={}, size={}, HG_OP_ID_IGNORE) = {}", 
-            fmt::ptr(hgi->context),
-            "lambda::completion_callback", fmt::ptr(ctx), "HG_BULK_PULL", 
-            fmt::ptr(hgi->addr), fmt::ptr(&remote_bulk_handle), 0,
-            fmt::ptr(&local_bulk_handle), 0, transfer_size, ret);
+    HERMES_DEBUG2("HG_Bulk_transfer(hg_context={}, callback={}, arg={}, op={}, "
+                  "addr={}, origin_handle={}, origin_offset={}, "
+                  "local_handle={}, local_offset={}, size={}, HG_OP_ID_IGNORE) "
+                  "= {}", fmt::ptr(hgi->context), "lambda::completion_callback", 
+                  fmt::ptr(ctx), "HG_BULK_PULL", fmt::ptr(hgi->addr), 
+                  fmt::ptr(&remote_bulk_handle), 0,
+                  fmt::ptr(&local_bulk_handle), 0, transfer_size, ret);
 
     if(ret != HG_SUCCESS) {
         throw std::runtime_error("Failed to pull remote data: " +
@@ -490,8 +491,9 @@ mercury_respond(request<Input>&& req,
                             // output struct
                             &out);
 
-    DEBUG2("HG_Respond(hg_handle={}, callback={}, arg={}, out_struct={}) = {}", 
-           fmt::ptr(req.m_handle), "NULL", "NULL", fmt::ptr(&out), ret);
+    HERMES_DEBUG2("HG_Respond(hg_handle={}, callback={}, arg={}, "
+                  "out_struct={}) = {}", fmt::ptr(req.m_handle), "NULL", 
+                  "NULL", fmt::ptr(&out), ret);
 
     if(ret != HG_SUCCESS) {
         throw std::runtime_error("Failed to respond: " + 

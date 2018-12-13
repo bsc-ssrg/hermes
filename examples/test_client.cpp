@@ -41,17 +41,17 @@ main(int argc, char* argv[]) {
          **********************************************************************/
         const std::string message("Hello world!!!");
 
-        INFO("Sending RPC (send_message, args: \"{}\")", message);
+        HERMES_INFO("Sending RPC (send_message, args: \"{}\")", message);
 
         auto rpc1 = hg.broadcast<example_rpcs::send_message>(endps, message);
 
         // wait for results
         hermes::output_set<example_rpcs::send_message> results = rpc1.get();
 
-        INFO("Output received (size: {})", results.size());
+        HERMES_INFO("Output received (size: {})", results.size());
 
         for(auto&& rv : results) {
-            INFO("retval: {}", rv.retval());
+            HERMES_INFO("retval: {}", rv.retval());
         }
 #endif
 
@@ -75,14 +75,14 @@ main(int argc, char* argv[]) {
             hermes::mutable_buffer{pp->data(), pp->size()},
         };
 
-        INFO("      Initial buffer contents: \"{}\"", 
+        HERMES_INFO("      Initial buffer contents: \"{}\"", 
                 std::string(reinterpret_cast<char*>(pp->data()), 150));
 #endif
 
         hermes::exposed_memory exposed_buffers = 
             hg.expose(bufvec, access_mode::read_only);
 
-        INFO("Sending [send_buffer] RPC");
+        HERMES_INFO("Sending [send_buffer] RPC");
 
         // Option 1: 
         //   Instantiate an [RPC]_args object containing the arguments and
@@ -90,7 +90,7 @@ main(int argc, char* argv[]) {
         example_rpcs::send_buffer::input in3a("test3a", exposed_buffers);
         auto rpc2a = hg.broadcast<example_rpcs::send_buffer>(endps, in3a);
 
-        INFO("Sending [send_buffer] RPC");
+        HERMES_INFO("Sending [send_buffer] RPC");
 
         // Option 2: 
         //   Instantiate an [RPC]_args object containing the arguments 
@@ -100,7 +100,7 @@ main(int argc, char* argv[]) {
                     endps, example_rpcs::send_buffer::input(
                             "test3b", exposed_buffers));
 
-        INFO("Sending [send_buffer] RPC");
+        HERMES_INFO("Sending [send_buffer] RPC");
 
         // Option 3: 
         //   Pass the RPC arguments directly to the post() function
@@ -112,14 +112,14 @@ main(int argc, char* argv[]) {
         // hermes::output_set<example_rpcs::send_buffer> results2b = rpc2b.get();
         // hermes::output_set<example_rpcs::send_buffer> results2c = rpc2c.get();
 
-        INFO("result_set size {}:", results2a.size());
+        HERMES_INFO("result_set size {}:", results2a.size());
 
         for(auto&& rv : results2a) {
-            INFO("{}", rv.retval());
+            HERMES_INFO("{}", rv.retval());
         }
 #endif
 
-        INFO("Sending [shutdown]");
+        HERMES_INFO("Sending [shutdown]");
 
         hg.post<example_rpcs::shutdown>(endps[0]);
     } 

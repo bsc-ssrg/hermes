@@ -94,7 +94,7 @@ if (HERMES_LOGGING)
   find_package(fmt 5.0)
   
   if(fmt_FOUND)
-    target_compile_definitions(hermes INTERFACE HAVE_FMT=1 HERMES_DEBUG=1)
+    target_compile_definitions(hermes INTERFACE HAVE_FMT=1 HERMES_DEBUG_BUILD=1)
     target_link_libraries(hermes INTERFACE fmt)
   else()
     target_compile_definitions(hermes INTERFACE HAVE_FMT=0)

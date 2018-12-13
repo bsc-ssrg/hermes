@@ -109,7 +109,7 @@ public:
     }
 
     ~request() { 
-        DEBUG2("{}()", __func__);
+        HERMES_DEBUG2("{}()", __func__);
 
         if(m_handle != HG_HANDLE_NULL) {
 
@@ -118,15 +118,15 @@ public:
             if(m_mercury_input) {
                 ret = HG_Free_input(m_handle, m_mercury_input.get());
 
-                DEBUG2("HG_Free_input({}, {}) = {}", 
-                    fmt::ptr(m_handle), fmt::ptr(&m_mercury_input), 
-                    HG_Error_to_string(ret));
+                HERMES_DEBUG2("HG_Free_input({}, {}) = {}", 
+                              fmt::ptr(m_handle), fmt::ptr(&m_mercury_input), 
+                              HG_Error_to_string(ret));
             }
 
             ret = HG_Destroy(m_handle);
 
-            DEBUG2("HG_Destroy({}) = {}", 
-                   fmt::ptr(m_handle), HG_Error_to_string(ret));
+            HERMES_DEBUG2("HG_Destroy({}) = {}", 
+                          fmt::ptr(m_handle), HG_Error_to_string(ret));
 
             (void) ret; // avoid warnings if !DEBUG
         }
