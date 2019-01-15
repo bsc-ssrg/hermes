@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <unistd.h>
 
 // C++ includes
 #include <cstddef>
