@@ -46,6 +46,10 @@ using endpoint_set = std::vector<endpoint>;
 template <typename Request>
 using output_set = std::vector<typename Request::output_type>;
 
+namespace detail {
+void register_user_request_types();
+} // namespace detail
+
 /** public */
 class async_engine {
 
@@ -514,6 +518,8 @@ private:
 
         assert(m_hg_class);
         assert(m_hg_context);
+
+        detail::register_user_request_types();
 
         for(auto&& kv : detail::registered_requests()) {
 
