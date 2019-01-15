@@ -21,10 +21,7 @@
 #include <mercury_hash_string.h>
 
 // project includes
-#if __cplusplus == 201103L
 #include <hermes/make_unique.hpp>
-#endif // __cplusplus == 201103L
-
 #include <hermes/endpoint.hpp>
 #include <hermes/exposed_memory.hpp>
 #include <hermes/logging.hpp>
@@ -98,7 +95,7 @@ public:
 
         if(m_listen) {
             m_self_address = 
-                std::make_unique<detail::address>(
+                compat::make_unique<detail::address>(
                     detail::address::self_address(m_hg_class));
 
             HERMES_DEBUG("Self address: {}", m_self_address->to_string());

@@ -64,9 +64,9 @@ public:
 
     request(hg_handle_t handle) :
         m_handle(handle),
-        m_mercury_input(std::make_unique<MercuryInput>(
+        m_mercury_input(compat::make_unique<MercuryInput>(
                     detail::decode_mercury_input<Request>(m_handle))),
-        m_input(std::make_unique<Input>(*m_mercury_input)),
+        m_input(compat::make_unique<Input>(*m_mercury_input)),
         m_requires_response(Request::requires_response) { }
 
     request(const request& other) = delete;

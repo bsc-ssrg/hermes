@@ -1,50 +1,53 @@
 #ifndef __HERMES_MAKE_UNIQUE_HPP__
 #define __HERMES_MAKE_UNIQUE_HPP__
 
-#ifndef HERMES_DISABLE_INTERNAL_MAKE_UNIQUE
-
 #include <memory>
 
-#if __cplusplus != 201103L
-#error This file should only be included when compiling in C++11 mode. \
-       To safely use this file when compiling with the C++11 standard, \
-       guard it like this: \
-       "#if __cplusplus == 201103L #include <hermes/make_unique.hpp #endif"
-#endif
+namespace hermes {
+namespace compat {
+
+#if __cplusplus == 201103L
 
 // since C++11 doesn't offer make_unique, we borrow the template definition
 // from C++14 (see https://isocpp.org/files/papers/N3656.txt)
-namespace std {
-    template<class T> struct _Unique_if {
-        typedef unique_ptr<T> _Single_object;
-    };
+template<class T> struct _Unique_if {
+    typedef std::unique_ptr<T> _Single_object;
+};
 
-    template<class T> struct _Unique_if<T[]> {
-        typedef unique_ptr<T[]> _Unknown_bound;
-    };
+template<class T> struct _Unique_if<T[]> {
+    typedef std::unique_ptr<T[]> _Unknown_bound;
+};
 
-    template<class T, size_t N> struct _Unique_if<T[N]> {
-        typedef void _Known_bound;
-    };
+template<class T, size_t N> struct _Unique_if<T[N]> {
+    typedef void _Known_bound;
+};
 
-    template<class T, class... Args>
-        typename _Unique_if<T>::_Single_object
-        make_unique(Args&&... args) {
-            return unique_ptr<T>(new T(std::forward<Args>(args)...));
-        }
-
-    template<class T>
-        typename _Unique_if<T>::_Unknown_bound
-        make_unique(size_t n) {
-            typedef typename remove_extent<T>::type U;
-            return unique_ptr<T>(new U[n]());
-        }
-
-    template<class T, class... Args>
-        typename _Unique_if<T>::_Known_bound
-        make_unique(Args&&...) = delete;
+template<class T, class... Args>
+typename _Unique_if<T>::_Single_object
+make_unique(Args&&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
-#endif // HERMES_DISABLE_INTERNAL_MAKE_UNIQUE
+template<class T>
+typename _Unique_if<T>::_Unknown_bound
+make_unique(size_t n) {
+    typedef typename std::remove_extent<T>::type U;
+    return std::unique_ptr<T>(new U[n]());
+}
+
+template<class T, class... Args>
+typename _Unique_if<T>::_Known_bound
+make_unique(Args&&...) = delete;
+
+#else // __cplusplus != 201103L
+
+// in C++14/17 we can simply provide an alias to the standard function
+template <typename T>
+constexpr auto make_unique = std::make_unique<T>;
+
+#endif // __cplusplus != 201103L
+
+} // namespace compat
+} // namespace hermes
 
 #endif // __HERMES_MAKE_UNIQUE_HPP__

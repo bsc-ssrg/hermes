@@ -87,7 +87,7 @@ mercury_address_to_string(const hg_class_t* hg_class,
     }
 
     // allocate buffer and request the conversion fron Mercury
-    const auto buffer = std::make_unique<char[]>(buffer_size);
+    const auto buffer = compat::make_unique<char[]>(buffer_size);
 
     ret = HG_Addr_to_string(
             const_cast<hg_class_t*>(hg_class), 

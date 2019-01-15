@@ -70,7 +70,7 @@ class rpc_handle {
             HERMES_DEBUG2("Creating execution_context for RPC");
 
             m_ctxs.emplace_back(
-                std::make_unique<ExecutionContext>(
+                compat::make_unique<ExecutionContext>(
                     this, 
                     hg_context, 
                     addr, 
