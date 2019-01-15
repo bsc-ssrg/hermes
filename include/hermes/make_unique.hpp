@@ -42,8 +42,10 @@ make_unique(Args&&...) = delete;
 #else // __cplusplus != 201103L
 
 // in C++14/17 we can simply provide an alias to the standard function
-template <typename T>
-constexpr auto make_unique = std::make_unique<T>;
+template <typename T, typename... Args>
+constexpr auto make_unique(Args&&... args) {
+    return std::make_unique<T>(std::forward<Args>(args)...);
+}
 
 #endif // __cplusplus != 201103L
 
