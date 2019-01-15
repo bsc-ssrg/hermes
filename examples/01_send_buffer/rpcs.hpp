@@ -514,24 +514,6 @@ struct shutdown {
 
 } // namespace example_rpcs
 
-//==============================================================================
-// register request types so that they can be used by users and the engine
-namespace hermes { namespace detail {
-
-static bool type1 __attribute__((used)) = 
-    registered_requests().add<example_rpcs::send_message>();
-
-static bool type2 __attribute__((used)) = 
-    registered_requests().add<example_rpcs::send_file>();
-
-static bool type3 __attribute__((used)) = 
-    registered_requests().add<example_rpcs::send_buffer>();
-
-static bool type4 __attribute__((used)) = 
-    registered_requests().add<example_rpcs::shutdown>();
-
-}} // namespace hermes::detail
-
 #undef HG_GEN_PROC_NAME
 
 #endif // __HERMES_RPCS_V2_HPP__

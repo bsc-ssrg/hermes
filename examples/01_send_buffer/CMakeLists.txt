@@ -1,11 +1,23 @@
 find_package(Sanitizers)
 
-add_executable(01_send_buffer_client client.cpp)
+add_executable(01_send_buffer_client "")
 add_sanitizers(01_send_buffer_client)
+target_sources(01_send_buffer_client 
+    PRIVATE
+        client.cpp
+        rpcs.hpp
+        rpcs.cpp
+)
 target_link_libraries(01_send_buffer_client hermes)
 
-add_executable(01_send_buffer_server server.cpp)
+add_executable(01_send_buffer_server "")
 add_sanitizers(01_send_buffer_server)
+target_sources(01_send_buffer_server 
+    PRIVATE
+        server.cpp
+        rpcs.hpp
+        rpcs.cpp
+)
 target_link_libraries(01_send_buffer_server hermes)
 
 add_custom_command(

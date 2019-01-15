@@ -11,7 +11,7 @@
 namespace logging {
 static unsigned int debug_output_level = 1;
 
-void
+static inline void
 set_debug_output_level(unsigned int level) {
     debug_output_level = level;
 }
