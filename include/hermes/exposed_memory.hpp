@@ -11,18 +11,13 @@
 #include <cassert>
 
 // project includes
+#include <hermes/access_mode.hpp>
 #include <hermes/buffer.hpp>
 #include <hermes/logging.hpp>
 #include <hermes/detail/mercury_utils.hpp>
 
 
 namespace hermes {
-
-enum class access_mode : hg_uint32_t {
-    read_only  = HG_BULK_READ_ONLY,
-    write_only = HG_BULK_WRITE_ONLY,
-    read_write = HG_BULK_READWRITE
-};
 
 /**
  * The @c exposed_memory class represent abstractions of memory segments exposed
@@ -39,7 +34,11 @@ public:
     using const_iterator = std::vector<mutable_buffer>::const_iterator;
 
     /** Constructs an empty exposed_memory object */
-    exposed_memory() { }
+    exposed_memory() :
+        m_hg_class(NULL),
+        m_mode(access_mode::read_only),
+        m_size(0),
+        m_bulk_handle(HG_BULK_NULL) { }
 
     /** Constructs a @c exposed_memory object from a @c BufferSequence */
     template <typename BufferSequence>

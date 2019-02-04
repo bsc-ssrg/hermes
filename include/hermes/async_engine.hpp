@@ -110,10 +110,6 @@ public:
      */
     ~async_engine() {
 
-        // we need to release the hg_addr_t contained in m_self_address
-        // so that HG_Context_destroy() and HG_Finalize() work as expected
-        m_self_address.reset();
-
         HERMES_DEBUG("Destroying Mercury asynchronous engine");
         HERMES_DEBUG("  Stopping runners");
 
@@ -128,6 +124,10 @@ public:
             std::lock_guard<std::mutex> lock(m_addr_cache_mutex);
             m_address_cache.clear();
         }
+
+        // we need to release the hg_addr_t contained in m_self_address
+        // so that HG_Context_destroy() and HG_Finalize() work as expected
+        m_self_address.reset();
 
         if(m_hg_context != NULL) {
             HERMES_DEBUG("  Destroying context");
@@ -151,6 +151,12 @@ public:
             }
         }
     }
+
+    std::string
+    self_address() const {
+        return m_self_address->to_string();
+    }
+
 
     hg_return_t
     wait_on(const lookup_ctx& ctx) const {
