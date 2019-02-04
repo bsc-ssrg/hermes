@@ -10,6 +10,7 @@
 #include <memory>
 #include <future>
 #include <cstdint>
+#include <numeric>
 
 // project includes
 #if __cplusplus == 201103L
