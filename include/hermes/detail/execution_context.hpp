@@ -47,9 +47,9 @@ struct execution_context {
         // that any pointers in m_mercury_input that refer back to it (e.g. 
         // strings) survives as long as needed (this is required because
         // mercury does not take ownership of any pointers in the user input)
-        m_user_input(input),
+        m_user_input(std::move(input)),
         // invoke explicit cast constructor
-        m_mercury_input(input) { }
+        m_mercury_input(m_user_input) { }
 
     Handle* m_parent;
     const hg_context_t* const m_hg_context;
