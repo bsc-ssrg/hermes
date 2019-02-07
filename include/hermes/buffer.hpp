@@ -11,6 +11,7 @@
 // C++ includes
 #include <cstddef>
 #include <stdexcept>
+#include <system_error>
 
 // project includes
 #include <hermes/access_mode.hpp>
@@ -87,7 +88,8 @@ class mapped_buffer {
 
 public:
     explicit mapped_buffer(const std::string& pathname,
-                           hermes::access_mode mode = access_mode::read_only) {
+                           hermes::access_mode access_mode,
+                           std::error_code* ec = 0) {
 
         const auto build_error_msg = [](const std::string& msg) {
             // 1024 should be more than enough for most locales
@@ -99,20 +101,31 @@ public:
         int fd = ::open(pathname.c_str(), O_RDWR);
 
         if(fd == -1) {
-            throw std::runtime_error(
-                    build_error_msg("Failed to open file"));
+            if(ec == 0) {
+                throw std::runtime_error(
+                        build_error_msg("Failed to open file"));
+            }
+
+            *ec = std::make_error_code(static_cast<std::errc>(errno));
+            return;
         }
 
         struct stat stbuf;
 
         if(::fstat(fd, &stbuf) != 0) {
-            throw std::runtime_error(
-                    build_error_msg("Failed to retrieve file size"));
+            if(ec == 0) {
+                throw std::runtime_error(
+                        build_error_msg("Failed to retrieve file size"));
+            }
+
+            *ec = std::make_error_code(static_cast<std::errc>(errno));
+            ::close(fd);
+            return;
         }
 
         m_size = stbuf.st_size;
 
-        int prots = ::get_page_protections(mode);
+        int prots = ::get_page_protections(access_mode);
         int flags = MAP_SHARED;
 
 #ifdef MAP_HUGETLB
@@ -135,8 +148,14 @@ public:
                 HERMES_DEBUG2("::mmap(NULL, {}, {:#x}, {:#x}, {}, 0) = MAP_FAILED", 
                               stbuf.st_size, prots, flags, fd, 0);
 #endif
-                throw std::runtime_error(
-                        build_error_msg("mmap() on file failed"));
+                if(ec == 0) {
+                    throw std::runtime_error(
+                            build_error_msg("mmap() on file failed"));
+                }
+
+                *ec = std::make_error_code(static_cast<std::errc>(errno));
+                ::close(fd);
+                return;
 #ifdef MAP_HUGETLB
             }
 #endif
@@ -146,8 +165,13 @@ public:
                       stbuf.st_size, prots, flags, fd, m_data);
 
         if(::close(fd) != 0) {
-            throw std::runtime_error(
-                    build_error_msg("close() on file failed"));
+
+            if(ec == 0) {
+                throw std::runtime_error(
+                        build_error_msg("close() on file failed"));
+            }
+
+            *ec = std::make_error_code(static_cast<std::errc>(errno));
         }
     }
 
