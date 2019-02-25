@@ -418,8 +418,9 @@ post_to_mercury(ExecutionContext* ctx) {
 template <typename ExecutionContext>
 inline void
 mercury_bulk_transfer(hg_handle_t handle, 
-                      hg_bulk_t remote_bulk_handle,
-                      hg_bulk_t local_bulk_handle,
+                      hg_bulk_op_t transfer_type,
+                      hg_bulk_t origin_bulk_handle,
+                      hg_bulk_t destination_bulk_handle,
                       ExecutionContext* ctx,
                       hg_cb_t completion_callback) {
 
@@ -430,7 +431,7 @@ mercury_bulk_transfer(hg_handle_t handle,
                                  "from internal handle");
     }
 
-    hg_size_t transfer_size = HG_Bulk_get_size(remote_bulk_handle);
+    hg_size_t transfer_size = HG_Bulk_get_size(origin_bulk_handle);
 
     if(transfer_size == 0) {
         throw std::runtime_error("Bulk size to transfer is 0");
@@ -443,16 +444,16 @@ mercury_bulk_transfer(hg_handle_t handle,
             completion_callback,
             // pointer to data passed to callback
             reinterpret_cast<void*>(ctx),
-            // transfer operation: pull from client
-            HG_BULK_PULL,
+            // transfer type: pull from client/push to client
+            transfer_type,
             // address of origin
             hgi->addr,
             // bulk handle from origin
-            remote_bulk_handle,
+            origin_bulk_handle,
             // origin offset
             0,
-            // local bulk handle
-            local_bulk_handle,
+            // destination bulk handle
+            destination_bulk_handle,
             // local offset
             0,
             // size of data to be transferred
@@ -465,8 +466,8 @@ mercury_bulk_transfer(hg_handle_t handle,
                   "local_handle={}, local_offset={}, size={}, HG_OP_ID_IGNORE) "
                   "= {}", fmt::ptr(hgi->context), "lambda::completion_callback", 
                   fmt::ptr(ctx), "HG_BULK_PULL", fmt::ptr(hgi->addr), 
-                  fmt::ptr(&remote_bulk_handle), 0,
-                  fmt::ptr(&local_bulk_handle), 0, transfer_size, ret);
+                  fmt::ptr(&origin_bulk_handle), 0,
+                  fmt::ptr(&destination_bulk_handle), 0, transfer_size, ret);
 
     if(ret != HG_SUCCESS) {
         throw std::runtime_error("Failed to pull remote data: " +

@@ -491,8 +491,79 @@ public:
                 };
 
         detail::mercury_bulk_transfer(ctx->m_request.m_handle,
+                                      HG_BULK_PULL,
                                       remote_bulk_handle, 
                                       local_bulk_handle, 
+                                      ctx,
+                                      completion_callback);
+    }
+
+    template <typename Input, typename Callable>
+    void async_push(const exposed_memory& src,
+                    const exposed_memory& dst,
+                    request<Input>&& req,
+                    Callable&& user_callback) {
+
+        hg_bulk_t local_bulk_handle = src.mercury_bulk_handle();
+        hg_bulk_t remote_bulk_handle = dst.mercury_bulk_handle();
+
+        assert(local_bulk_handle != HG_BULK_NULL);
+        assert(remote_bulk_handle != HG_BULK_NULL);
+
+        // We need to allow custom user callbacks, but the Mercury API 
+        // restricts us in the prototypes that we can use. Since we don't
+        // want users to bother with Mercury internals, // we register our own
+        // completion_callback() lambda and we dynamically allocate
+        // a transfer_context with all the required information that we
+        // propagate through Mercury using the arg field in HG_Bulk_transfer().
+        // Once our callback is invoked, we can unpack the information, delete
+        // the transfer_context and invoke the actual user callback
+        struct transfer_context {
+            transfer_context(request<Input>&& req, 
+                             Callable&& user_callback) :
+                m_request(std::move(req)),
+                m_user_callback(user_callback) { }
+
+            ~transfer_context() {
+                HERMES_DEBUG("{}()", __func__);
+            }
+
+            request<Input> m_request;
+            // XXX For some reason, declaring m_user_callback as:
+            //    Callable m_user_callback;
+            // causes a weird bug with GCC 4.9 where any variables captured 
+            // by value in the lambda get corrupted. Replacing it with 
+            // std::function fixes this
+            std::function<void(request<Input>&&)> m_user_callback;
+        };
+
+        auto* ctx =
+            new transfer_context(std::move(req), 
+                                 user_callback);
+
+        const auto completion_callback =
+                [](const struct hg_cb_info* cbi) -> hg_return_t {
+
+                    if(cbi->ret != HG_SUCCESS) {
+                        HERMES_DEBUG("Bulk transfer failed");
+                        return cbi->ret;
+                    }
+
+                    // make sure that ctx is freed regardless of what might 
+                    // happen in m_user_callback()
+                    const auto ctx = 
+                        std::unique_ptr<transfer_context>(
+                                reinterpret_cast<transfer_context*>(cbi->arg));
+
+                    ctx->m_user_callback(std::move(ctx->m_request));
+
+                    return HG_SUCCESS;
+                };
+
+        detail::mercury_bulk_transfer(ctx->m_request.m_handle,
+                                      HG_BULK_PUSH,
+                                      local_bulk_handle, 
+                                      remote_bulk_handle, 
                                       ctx,
                                       completion_callback);
     }
