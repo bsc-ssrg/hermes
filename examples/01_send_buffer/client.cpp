@@ -87,7 +87,8 @@ main(int argc, char* argv[]) {
         char data[]  = {"These are the contents of an example buffer"};
         auto mapped_file = 
             std::make_shared<hermes::mapped_buffer>(
-                    "examples/01_send_buffer/lipsum.txt");
+                    "examples/01_send_buffer/lipsum.txt",
+                    hermes::access_mode::read_only);
 
         std::vector<hermes::mutable_buffer> bufvec {
             hermes::mutable_buffer{data, sizeof(data)},
