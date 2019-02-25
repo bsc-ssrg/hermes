@@ -465,7 +465,10 @@ mercury_bulk_transfer(hg_handle_t handle,
                   "addr={}, origin_handle={}, origin_offset={}, "
                   "local_handle={}, local_offset={}, size={}, HG_OP_ID_IGNORE) "
                   "= {}", fmt::ptr(hgi->context), "lambda::completion_callback", 
-                  fmt::ptr(ctx), "HG_BULK_PULL", fmt::ptr(hgi->addr), 
+                  fmt::ptr(ctx), 
+                  (transfer_type == HG_BULK_PULL ? "HG_BULK_PULL" : 
+                    "HG_BULK_PUSH"), 
+                  fmt::ptr(hgi->addr), 
                   fmt::ptr(&origin_bulk_handle), 0,
                   fmt::ptr(&local_bulk_handle), 0, transfer_size, ret);
 
