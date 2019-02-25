@@ -1,7 +1,6 @@
 find_package(Sanitizers)
 
 add_executable(00_hello_world_client "")
-add_sanitizers(00_hello_world_client)
 target_sources(00_hello_world_client 
     PRIVATE
         client.cpp
@@ -9,9 +8,9 @@ target_sources(00_hello_world_client
         rpcs.cpp
 )
 target_link_libraries(00_hello_world_client hermes)
+add_sanitizers(00_hello_world_client)
 
 add_executable(00_hello_world_server "")
-add_sanitizers(00_hello_world_server)
 target_sources(00_hello_world_server 
     PRIVATE
         server.cpp
@@ -19,3 +18,4 @@ target_sources(00_hello_world_server
         rpcs.cpp
 )
 target_link_libraries(00_hello_world_server hermes)
+add_sanitizers(00_hello_world_server)

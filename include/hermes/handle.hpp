@@ -110,8 +110,8 @@ public:
 
         HERMES_DEBUG("Getting RPC results (pending: {})", m_futures.size());
 
-        constexpr const auto TIMEOUT = std::chrono::seconds(1);
-        constexpr const auto RETRIES = 5;
+        constexpr const auto TIMEOUT = std::chrono::seconds(100);
+        constexpr const auto RETRIES = 0;
 
         std::vector<Output> result_set;
         std::vector<bool> retrieved(m_futures.size(), false);

@@ -1,2 +1,3 @@
 add_subdirectory(00_hello_world)
 add_subdirectory(01_send_buffer)
+add_subdirectory(02_recv_buffer)

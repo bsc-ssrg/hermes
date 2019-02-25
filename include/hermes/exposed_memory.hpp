@@ -155,7 +155,7 @@ public:
         hg_return_t ret = HG_Bulk_access(bulk_handle, 
                                          static_cast<hg_size_t>(0), 
                                          bulk_size,
-                                         HG_BULK_READ_ONLY,
+                                         HG_BULK_READ_ONLY, // ignored by Mercury ATM
                                          bulk_count,
                                          ptrs,
                                          sizes,
@@ -184,8 +184,12 @@ public:
         }
         HERMES_DEBUG2("}}");
 
-        ///XXX ???? m_hg_class = hg_class;
-        m_mode = access_mode::read_only,
+        ///XXX Should this refer to the local class or the remote class?
+        // (also, Mercury does not offer a way to retrieve this info, yet)
+        /// m_hg_class = hg_class;
+        //XXX we would need something like HG_Bulk_get_flags() but it does
+        // not exist in Mercury yet. Thus, for now we set it to read_write 
+        m_mode = access_mode::read_write,
         m_size = bulk_size;
         m_bulk_handle = bulk_handle;
     }

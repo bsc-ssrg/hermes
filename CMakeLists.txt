@@ -17,7 +17,7 @@ endif ()
 
 
 if (NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 11)
+  set(CMAKE_CXX_STANDARD 14)
 endif()
 
 ### # Joins arguments and places the results in ${result_var}.

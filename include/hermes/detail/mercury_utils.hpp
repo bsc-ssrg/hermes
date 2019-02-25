@@ -420,7 +420,7 @@ inline void
 mercury_bulk_transfer(hg_handle_t handle, 
                       hg_bulk_op_t transfer_type,
                       hg_bulk_t origin_bulk_handle,
-                      hg_bulk_t destination_bulk_handle,
+                      hg_bulk_t local_bulk_handle,
                       ExecutionContext* ctx,
                       hg_cb_t completion_callback) {
 
@@ -452,8 +452,8 @@ mercury_bulk_transfer(hg_handle_t handle,
             origin_bulk_handle,
             // origin offset
             0,
-            // destination bulk handle
-            destination_bulk_handle,
+            // local bulk handle
+            local_bulk_handle,
             // local offset
             0,
             // size of data to be transferred
@@ -467,10 +467,10 @@ mercury_bulk_transfer(hg_handle_t handle,
                   "= {}", fmt::ptr(hgi->context), "lambda::completion_callback", 
                   fmt::ptr(ctx), "HG_BULK_PULL", fmt::ptr(hgi->addr), 
                   fmt::ptr(&origin_bulk_handle), 0,
-                  fmt::ptr(&destination_bulk_handle), 0, transfer_size, ret);
+                  fmt::ptr(&local_bulk_handle), 0, transfer_size, ret);
 
     if(ret != HG_SUCCESS) {
-        throw std::runtime_error("Failed to pull remote data: " +
+        throw std::runtime_error("Failed to transfer remote data: " +
                 std::string(HG_Error_to_string(ret)));
     }
 }

@@ -98,7 +98,7 @@ std::array<
     std::make_tuple(
             transport::ofi_tcp,
             "ofi+sockets://",
-            "ofi+sockets://fi_sockaddr_in://"
+            "ofi+sockets://"
             ),
     std::make_tuple(
             transport::ofi_verbs,

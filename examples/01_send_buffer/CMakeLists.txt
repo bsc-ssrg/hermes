@@ -1,7 +1,6 @@
 find_package(Sanitizers)
 
 add_executable(01_send_buffer_client "")
-add_sanitizers(01_send_buffer_client)
 target_sources(01_send_buffer_client 
     PRIVATE
         client.cpp
@@ -9,9 +8,9 @@ target_sources(01_send_buffer_client
         rpcs.cpp
 )
 target_link_libraries(01_send_buffer_client hermes)
+add_sanitizers(01_send_buffer_client)
 
 add_executable(01_send_buffer_server "")
-add_sanitizers(01_send_buffer_server)
 target_sources(01_send_buffer_server 
     PRIVATE
         server.cpp
@@ -19,6 +18,7 @@ target_sources(01_send_buffer_server
         rpcs.cpp
 )
 target_link_libraries(01_send_buffer_server hermes)
+add_sanitizers(01_send_buffer_server)
 
 add_custom_command(
   TARGET 01_send_buffer_client POST_BUILD

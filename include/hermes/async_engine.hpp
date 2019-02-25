@@ -429,16 +429,16 @@ public:
     }
 
     template <typename Input, typename Callable>
-    void async_pull(const exposed_memory& src,
-                    const exposed_memory& dst,
+    void async_pull(const exposed_memory& origin_memory,
+                    const exposed_memory& local_memory,
                     request<Input>&& req,
                     Callable&& user_callback) {
 
-        hg_bulk_t local_bulk_handle = dst.mercury_bulk_handle();
-        hg_bulk_t remote_bulk_handle = src.mercury_bulk_handle();
+        hg_bulk_t origin_bulk_handle = origin_memory.mercury_bulk_handle();
+        hg_bulk_t local_bulk_handle = local_memory.mercury_bulk_handle();
 
+        assert(origin_bulk_handle != HG_BULK_NULL);
         assert(local_bulk_handle != HG_BULK_NULL);
-        assert(remote_bulk_handle != HG_BULK_NULL);
 
         // We need to allow custom user callbacks, but the Mercury API 
         // restricts us in the prototypes that we can use. Since we don't
@@ -492,23 +492,23 @@ public:
 
         detail::mercury_bulk_transfer(ctx->m_request.m_handle,
                                       HG_BULK_PULL,
-                                      remote_bulk_handle, 
+                                      origin_bulk_handle, 
                                       local_bulk_handle, 
                                       ctx,
                                       completion_callback);
     }
 
     template <typename Input, typename Callable>
-    void async_push(const exposed_memory& src,
-                    const exposed_memory& dst,
+    void async_push(const exposed_memory& local_memory,
+                    const exposed_memory& origin_memory,
                     request<Input>&& req,
                     Callable&& user_callback) {
 
-        hg_bulk_t local_bulk_handle = src.mercury_bulk_handle();
-        hg_bulk_t remote_bulk_handle = dst.mercury_bulk_handle();
+        hg_bulk_t local_bulk_handle = local_memory.mercury_bulk_handle();
+        hg_bulk_t origin_bulk_handle = origin_memory.mercury_bulk_handle();
 
         assert(local_bulk_handle != HG_BULK_NULL);
-        assert(remote_bulk_handle != HG_BULK_NULL);
+        assert(origin_bulk_handle != HG_BULK_NULL);
 
         // We need to allow custom user callbacks, but the Mercury API 
         // restricts us in the prototypes that we can use. Since we don't
@@ -562,8 +562,8 @@ public:
 
         detail::mercury_bulk_transfer(ctx->m_request.m_handle,
                                       HG_BULK_PUSH,
+                                      origin_bulk_handle, 
                                       local_bulk_handle, 
-                                      remote_bulk_handle, 
                                       ctx,
                                       completion_callback);
     }
