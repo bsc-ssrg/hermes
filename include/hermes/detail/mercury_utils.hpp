@@ -292,7 +292,7 @@ post_to_mercury(ExecutionContext* ctx) {
         auto* ctx = reinterpret_cast<ExecutionContext*>(cbi->arg);
 
         if(cbi->ret == HG_CANCELED) {
-            switch(ctx->m_status) {
+            switch(ctx->m_status.load()) {
                 case request_status::timeout: 
                 {
                     HERMES_DEBUG2("Request timed out, reposting");
