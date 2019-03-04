@@ -253,7 +253,7 @@ public:
             HERMES_DEBUG2("::munmap({}, {}) = {}", m_data, m_size, rv);
         }
 
-        m_data == NULL;
+        m_data = NULL;
         m_size = 0;
     }
 
