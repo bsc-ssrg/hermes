@@ -87,9 +87,9 @@ private:
 class mapped_buffer {
 
 public:
-    explicit mapped_buffer(const std::string& pathname,
-                           hermes::access_mode access_mode,
-                           std::error_code* ec = 0) {
+    mapped_buffer(const std::string& pathname,
+                  hermes::access_mode access_mode,
+                  std::error_code* ec = 0) {
 
         const auto build_error_msg = [](const std::string& msg) {
             // 1024 should be more than enough for most locales
@@ -173,20 +173,12 @@ public:
 
             *ec = std::make_error_code(static_cast<std::errc>(errno));
         }
+
+        m_access_mode = access_mode;
     }
 
     ~mapped_buffer() {
-        if(m_data != NULL) {
-            // don't bother checking the error since we can't report it
-            int rv = ::munmap(m_data, m_size);
-
-            if(rv != 0) {
-                HERMES_ERROR("::munmap({}, {}) = {} (errno: {})", 
-                             m_data, m_size, rv, errno);
-            }
-
-            HERMES_DEBUG2("::munmap({}, {}) = {}", m_data, m_size, rv);
-        }
+        this->unmap();
     }
 
     /** Returns a pointer to the beginning of the memory region */
@@ -201,9 +193,74 @@ public:
         return m_size;
     }
 
+    std::tuple<void*, std::size_t>
+    release() {
+        auto ret = std::make_tuple(m_data, m_size);
+        m_data = NULL;
+        m_size = 0;
+        return ret;
+    }
+
+    hermes::access_mode
+    access_mode() const {
+        return m_access_mode;
+    }
+
+    void
+    protect(hermes::access_mode access_mode,
+            std::error_code* ec = 0) {
+
+        const auto build_error_msg = [](const std::string& msg) {
+            // 1024 should be more than enough for most locales
+            char buffer[1024];
+            return msg + ": " +
+                std::string(::strerror_r(errno, buffer, sizeof(buffer)));
+        };
+
+        if(::mprotect(m_data, m_size, 
+                      ::get_page_protections(access_mode)) != 0) {
+
+            std::error_code error;
+            error.assign(errno, std::generic_category());
+
+            HERMES_DEBUG2("::mprotect({}, {}, {:#x}) = {}", 
+                          m_data, m_size, ::get_page_protections(access_mode), 
+                          error.message());
+
+            if(ec == 0) {
+                throw std::runtime_error(
+                        build_error_msg("mprotect() failed"));
+            }
+
+            *ec = error;
+            return;
+        }
+
+        m_access_mode = access_mode;
+    }
+
+    void 
+    unmap() {
+        if(m_data != NULL) {
+            // don't bother checking the error since we can't report it
+            int rv = ::munmap(m_data, m_size);
+
+            if(rv != 0) {
+                HERMES_ERROR("::munmap({}, {}) = {} (errno: {})", 
+                             m_data, m_size, rv, errno);
+            }
+
+            HERMES_DEBUG2("::munmap({}, {}) = {}", m_data, m_size, rv);
+        }
+
+        m_data == NULL;
+        m_size = 0;
+    }
+
 private:
     void* m_data;
     std::size_t m_size;
+    hermes::access_mode m_access_mode;
 };
 
 } // namespace hermes
