@@ -148,7 +148,7 @@ public:
         void** ptrs = reinterpret_cast<void**>(
                 ::alloca(bulk_count * sizeof(void*)));
         hg_size_t* sizes = reinterpret_cast<hg_size_t*>(
-                ::alloca(bulk_size * sizeof(hg_size_t)));
+                ::alloca(bulk_count * sizeof(hg_size_t)));
 
         hg_uint32_t actual_count = 0;
 
