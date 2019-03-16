@@ -142,6 +142,11 @@ public:
         m_bulk_handle(std::move(rhs.m_bulk_handle)),
         m_buffers(std::move(rhs.m_buffers)) { 
 
+        rhs.m_hg_class = NULL;
+        rhs.m_mode = access_mode::read_only;
+        rhs.m_size = 0;
+        rhs.m_bulk_handle = HG_BULK_NULL;
+
 #ifdef HERMES_DEBUG_BUILD
         HERMES_DEBUG2("{}(this={}, rhs={})", 
                       __func__, fmt::ptr(this), fmt::ptr(&rhs));
@@ -160,6 +165,11 @@ public:
             m_size = std::move(rhs.m_size);
             m_bulk_handle = std::move(rhs.m_bulk_handle);
             m_buffers = std::move(rhs.m_buffers);
+
+            rhs.m_hg_class = NULL;
+            rhs.m_mode = access_mode::read_only;
+            rhs.m_size = 0;
+            rhs.m_bulk_handle = HG_BULK_NULL;
         }
 
 #ifdef HERMES_DEBUG_BUILD
@@ -236,6 +246,13 @@ public:
         m_mode = access_mode::read_write,
         m_size = bulk_size;
         m_bulk_handle = bulk_handle;
+
+        // since Mercury keeps a reference count for bulk handles
+        // we don't need to actually copy it, we can simply increase
+        // it's reference count. This also simplifies the destructor.
+        if(m_bulk_handle != HG_BULK_NULL) {
+            HG_Bulk_ref_incr(m_bulk_handle);
+        }
     }
 
     /** Destroys a @c exposed_memory object */
@@ -257,6 +274,13 @@ public:
     explicit operator hg_bulk_t() {
 
         assert(m_bulk_handle != HG_BULK_NULL);
+
+        // since Mercury keeps a reference count for bulk handles
+        // we don't need to actually copy it, we can simply increase
+        // it's reference count. This also simplifies the destructor.
+        if(m_bulk_handle != HG_BULK_NULL) {
+            HG_Bulk_ref_incr(m_bulk_handle);
+        }
 
         return m_bulk_handle;
     }
