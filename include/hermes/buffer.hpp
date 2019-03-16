@@ -177,6 +177,9 @@ public:
         m_access_mode = access_mode;
     }
 
+    mapped_buffer(const mapped_buffer& other) = delete;
+    mapped_buffer& operator=(const mapped_buffer& other) = delete;
+
     ~mapped_buffer() {
         this->unmap();
     }
