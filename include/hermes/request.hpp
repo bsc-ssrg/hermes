@@ -109,7 +109,19 @@ public:
     }
 
     ~request() { 
-        HERMES_DEBUG2("{}()", __func__);
+        HERMES_DEBUG2("{}(this={})", __func__, fmt::ptr(this));
+#if 0
+        HERMES_DEBUG2("this = {");
+        HERMES_DEBUG2("  m_handle = {},", fmt::ptr(m_handle));
+        HERMES_DEBUG2("  m_mercury_input = {},", 
+                      fmt::ptr(m_mercury_input.get()));
+        HERMES_DEBUG2("  m_input = {},", 
+                      fmt::ptr(m_input.get()));
+        HERMES_DEBUG2("  m_requires_response = {}", m_requires_response);
+        HERMES_DEBUG2("};");
+        HERMES_DEBUG_FLUSH();
+#endif
+
 
         if(m_handle != HG_HANDLE_NULL) {
 

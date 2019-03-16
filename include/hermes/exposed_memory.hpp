@@ -10,6 +10,10 @@
 // C++ includes
 #include <cassert>
 
+#ifdef HERMES_DEBUG_BUILD
+#include <string>
+#endif
+
 // project includes
 #include <hermes/access_mode.hpp>
 #include <hermes/buffer.hpp>
@@ -71,6 +75,11 @@ public:
                     ptrs.data(),
                     sizes.data(),
                     static_cast<hg_uint32_t>(m_mode));
+
+#ifdef HERMES_DEBUG_BUILD
+        HERMES_DEBUG2("{}(this={})", __func__, fmt::ptr(this));
+        this->print("this");
+#endif
     }
 
     exposed_memory(const exposed_memory& other) :
@@ -86,6 +95,15 @@ public:
         if(m_bulk_handle != HG_BULK_NULL) {
             HG_Bulk_ref_incr(m_bulk_handle);
         }
+
+#ifdef HERMES_DEBUG_BUILD
+        HERMES_DEBUG2("{}(this={}, other={})", 
+                      __func__, fmt::ptr(this), fmt::ptr(&other));
+
+        this->print("this");
+        other.print("other");
+#endif
+
     }
 
     exposed_memory&
@@ -106,6 +124,14 @@ public:
             }
         }
 
+#ifdef HERMES_DEBUG_BUILD
+        HERMES_DEBUG2("{}(this={}, other={})", 
+                      __func__, fmt::ptr(this), fmt::ptr(&other));
+
+        this->print("this");
+        other.print("other");
+#endif
+
         return *this;
     }
 
@@ -114,7 +140,16 @@ public:
         m_mode(std::move(rhs.m_mode)),
         m_size(std::move(rhs.m_size)),
         m_bulk_handle(std::move(rhs.m_bulk_handle)),
-        m_buffers(std::move(rhs.m_buffers)) { }
+        m_buffers(std::move(rhs.m_buffers)) { 
+
+#ifdef HERMES_DEBUG_BUILD
+        HERMES_DEBUG2("{}(this={}, rhs={})", 
+                      __func__, fmt::ptr(this), fmt::ptr(&rhs));
+
+        this->print("this");
+        rhs.print("rhs");
+#endif
+    }
 
     exposed_memory&
     operator=(exposed_memory&& rhs) {
@@ -126,6 +161,14 @@ public:
             m_bulk_handle = std::move(rhs.m_bulk_handle);
             m_buffers = std::move(rhs.m_buffers);
         }
+
+#ifdef HERMES_DEBUG_BUILD
+        HERMES_DEBUG2("{}(this={}, rhs={})", 
+                      __func__, fmt::ptr(this), fmt::ptr(&rhs));
+
+        this->print("this");
+        rhs.print("rhs");
+#endif
 
         return *this;
     }
@@ -152,14 +195,15 @@ public:
 
         hg_uint32_t actual_count = 0;
 
-        hg_return_t ret = HG_Bulk_access(bulk_handle, 
-                                         static_cast<hg_size_t>(0), 
-                                         bulk_size,
-                                         HG_BULK_READ_ONLY, // ignored by Mercury ATM
-                                         bulk_count,
-                                         ptrs,
-                                         sizes,
-                                         &actual_count);
+        hg_return_t ret = 
+            HG_Bulk_access(bulk_handle, 
+                           static_cast<hg_size_t>(0), 
+                           bulk_size,
+                           HG_BULK_READ_ONLY, // ignored by Mercury ATM
+                           bulk_count,
+                           ptrs,
+                           sizes,
+                           &actual_count);
 
         if(ret != HG_SUCCESS) {
             throw std::runtime_error("Failed to construct exposed_memory "
@@ -196,6 +240,9 @@ public:
 
     /** Destroys a @c exposed_memory object */
     ~exposed_memory() { 
+
+        HERMES_DEBUG2("{}(this={})", __func__, fmt::ptr(this));
+
         if(m_bulk_handle != HG_BULK_NULL) {
             // Mercury will actually free the bulk handle only if its 
             // reference count reaches zero. Thus, we can safely invoke
@@ -251,6 +298,51 @@ public:
     end() const {
         return m_buffers.end();
     }
+
+#ifdef HERMES_DEBUG_BUILD
+    void
+    print(const std::string& alias) const {
+
+        auto get_ref_count = [](hg_bulk_t bulk_handle) -> hg_int32_t {
+            hg_int32_t ref_count = -1;
+
+            if(!bulk_handle) {
+                return -1;
+            }
+
+            hg_return_t ret = 
+                HG_Bulk_ref_get(bulk_handle, &ref_count);
+
+                if(ret != HG_SUCCESS) {
+                    return -1;
+                }
+
+            return ref_count;
+        };
+
+#ifndef HAVE_FMT
+        (void) alias;
+        (void) get_ref_count;
+#endif
+
+        HERMES_DEBUG2("{} = {{", alias);
+        HERMES_DEBUG2("  m_hg_class = {},", fmt::ptr(m_hg_class));
+        HERMES_DEBUG2("  m_mode = {},", static_cast<hg_uint32_t>(m_mode));
+        HERMES_DEBUG2("  m_size = {},", m_size);
+        HERMES_DEBUG2("  m_bulk_handle = {}, (ref_count:{})",
+                      fmt::ptr(m_bulk_handle), get_ref_count(m_bulk_handle));
+        HERMES_DEBUG2("  m_buffers = {");
+
+        for(auto&& b : m_buffers) {
+            (void) b;
+            HERMES_DEBUG2("    {{data={}, size={}}},", 
+                          fmt::ptr(b.data()), b.size());
+        }
+        HERMES_DEBUG2("  },");
+        HERMES_DEBUG2("};");
+    }
+#endif
+
 private:
     const hg_class_t * m_hg_class;
     access_mode m_mode;

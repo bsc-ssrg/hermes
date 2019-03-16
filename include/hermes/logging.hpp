@@ -34,7 +34,6 @@ set_debug_output_level(unsigned int level) {
 #define HERMES_DEBUG(...) \
     HERMES_DEBUG_HELPER(1u, __VA_ARGS__);
 
-
 #define HERMES_DEBUG2(...) \
     HERMES_DEBUG_HELPER(2u, __VA_ARGS__);
 
@@ -55,22 +54,28 @@ set_debug_output_level(unsigned int level) {
         }                                                                     \
     } while(0);
 
+#define HERMES_DEBUG_FLUSH()    \
+    do {                        \
+        ::flush(stdout);        \
+    } while(0);
+
 #else // ! HERMES_DEBUG
 
-#define HERMES_DEBUG(...)  \
-    do {            \
+#define HERMES_DEBUG(...)       \
+    do {                        \
     } while(0); 
-
 
 #define HERMES_DEBUG2(...)     \
     HERMES_DEBUG(__VA_ARGS__)
 
-
-#define HERMES_DEBUG3(...)     \
+#define HERMES_DEBUG3(...)      \
     HERMES_DEBUG(__VA_ARGS__)
 
-#define HERMES_DEBUG4(...)     \
+#define HERMES_DEBUG4(...)      \
     HERMES_DEBUG(__VA_ARGS__)
+
+#define HERMES_DEBUG_FLUSH()    \
+    do { } while(0);
 
 #endif
 
@@ -113,6 +118,10 @@ set_debug_output_level(unsigned int level) {
 #ifndef HERMES_DEBUG4
 #define HERMES_DEBUG4(...)
 #endif // HERMES_DEBUG4
+
+#ifndef HERMES_DEBUG_FLUSH
+#define HERMES_DEBUG_FLUSH()
+#endif // HERMES_DEBUG_FLUSH
 
 #ifndef HERMES_ERROR
 #define HERMES_ERROR(...)
