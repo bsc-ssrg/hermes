@@ -1,3 +1,3 @@
 [submodule "externals/sanitizers-cmake"]
 	path = externals/sanitizers-cmake
-    url = https://storage.bsc.es/gitlab/hpc/sanitizers-cmake
+    url = https://storage.bsc.es/gitlab/hpc/sanitizers-cmake.git
