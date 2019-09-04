@@ -27,6 +27,7 @@ enum class transport : std::size_t {
     cci_sm,
 
     // OFI plugin
+    ofi_sockets,
     ofi_tcp,
     ofi_verbs,
     ofi_psm2,
@@ -96,9 +97,14 @@ std::array<
 
     // OFI plugin
     std::make_tuple(
-            transport::ofi_tcp,
+            transport::ofi_sockets,
             "ofi+sockets://",
             "ofi+sockets://"
+            ),
+    std::make_tuple(
+            transport::ofi_tcp,
+            "ofi+tcp://",
+            "ofi+tcp://"
             ),
     std::make_tuple(
             transport::ofi_verbs,
