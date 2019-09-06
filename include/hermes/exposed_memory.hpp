@@ -334,12 +334,14 @@ public:
                 return -1;
             }
 
+#if 0
             hg_return_t ret = 
                 HG_Bulk_ref_get(bulk_handle, &ref_count);
 
                 if(ret != HG_SUCCESS) {
                     return -1;
                 }
+#endif
 
             return ref_count;
         };
