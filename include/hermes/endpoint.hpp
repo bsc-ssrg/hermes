@@ -18,6 +18,11 @@ class endpoint {
         m_address(address) { }
 
 public:
+    endpoint(const endpoint& /*other*/) = default;
+    endpoint& operator=(const endpoint& /*other*/) = default;
+    endpoint(endpoint&& /*rhs*/) = default;
+    endpoint& operator=(endpoint&& /*rhs*/) = default;
+
     const std::string
     to_string() const {
         return m_address->to_string();
@@ -30,7 +35,7 @@ private:
     }
 
 private:
-    const std::shared_ptr<detail::address> m_address;
+    std::shared_ptr<detail::address> m_address;
 }; // class endpoint
 
 } // namespace hermes

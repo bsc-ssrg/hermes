@@ -194,13 +194,21 @@ public:
 
         HERMES_DEBUG("Looking up endpoint \"{}\"", addr);
 
-        // address does not contain a prefix
-        if(addr.find("://") != std::string::npos) {
-            throw std::runtime_error("Explicit specification of transport "
-                                     "protocol in addresses is not supported.");
+        // if address contains a prefix, make sure that it matches 
+        // the transport protocol used by the engine
+
+        const std::size_t pos = addr.find("://");
+
+        if(pos != std::string::npos) {
+            if(addr.substr(0, pos+3) != get_transport_lookup_prefix(m_transport)) {
+                throw std::runtime_error("Transport protocol provided by address "
+                                         "does not match engine's configured "
+                                         "tranport");
+            }
         }
 
         const std::string transport_address(
+                pos != std::string::npos ?  addr :
                 get_transport_lookup_prefix(m_transport) + addr);
 
         {
@@ -251,14 +259,14 @@ public:
                       transport_address, HG_Error_to_string(ret));
 
         if(ret != HG_SUCCESS) {
-            throw std::runtime_error("Failed to lookup target");
+            throw std::runtime_error(HG_Error_to_string(ret));
         }
 
         ret = wait_on(ctx);
 
         if(ret != HG_SUCCESS) {
             HERMES_DEBUG("Lookup request failed");
-            throw std::runtime_error("Failed to lookup target");
+            throw std::runtime_error(HG_Error_to_string(ret));
         }
 
         assert(ctx.m_lookup_finished);
