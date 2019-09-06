@@ -38,7 +38,7 @@ public:
     template <typename Request>
     bool
     add() {
-        constexpr const uint16_t id = Request::public_id;
+        constexpr const uint64_t id = Request::public_id;
         constexpr const hg_id_t mercury_id = Request::mercury_id;
         constexpr const auto name = Request::name;
         constexpr const auto requires_response = Request::requires_response;
@@ -60,7 +60,7 @@ public:
     }
 
     std::shared_ptr<request_descriptor_base>
-    at(uint16_t id) const {
+    at(uint64_t id) const {
 
         HERMES_DEBUG2("Fetching request descriptor for request type [{}]", id);
 
@@ -87,9 +87,9 @@ private:
     map_t m_request_types;
 };
 
-static request_registrar<uint16_t, request_descriptor_base>&
+static request_registrar<uint64_t, request_descriptor_base>&
 registered_requests() {
-    return request_registrar<uint16_t, request_descriptor_base>::singleton();
+    return request_registrar<uint64_t, request_descriptor_base>::singleton();
 }
 
 } // namespace detail
