@@ -23,7 +23,8 @@ namespace detail {
 inline hg_class_t*
 initialize_mercury(const std::string& transport_prefix,
                    const std::string& bind_address, 
-                   bool listen) {
+                   bool listen,
+                   const hg_init_info& hg_options) {
 
     assert(transport_prefix != "");
 
@@ -36,8 +37,9 @@ initialize_mercury(const std::string& transport_prefix,
     HERMES_DEBUG("Initializing Mercury transport layer (address: {})", address);
 
     hg_class_t* hg_class = 
-        HG_Init(address.c_str(),
-                listen ? HG_TRUE : HG_FALSE);
+        HG_Init_opt(address.c_str(),
+                listen ? HG_TRUE : HG_FALSE,
+                &hg_options);
 
     HERMES_DEBUG2("HG_Init({}, {}) = {}", 
                   address, listen ? "HG_TRUE" : "HG_FALSE", fmt::ptr(hg_class));

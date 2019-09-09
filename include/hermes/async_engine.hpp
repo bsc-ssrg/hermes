@@ -14,9 +14,11 @@
 #include <future>
 #include <chrono>
 #include <algorithm>
+#include <cstring>
 
 // C includes
 #include <mercury.h>
+#include <mercury_core_types.h>
 #include <mercury_macros.h>
 #include <mercury_hash_string.h>
 
@@ -26,11 +28,14 @@
 #include <hermes/exposed_memory.hpp>
 #include <hermes/logging.hpp>
 #include <hermes/transport.hpp>
+#include <hermes/options.hpp>
 
 #include <hermes/detail/address.hpp>
 #include <hermes/detail/mercury_utils.hpp>
 #include <hermes/detail/request_registrar.hpp>
 #include <hermes/detail/request_status.hpp>
+
+#include <iostream>
 
 namespace hermes {
 
@@ -75,17 +80,31 @@ public:
      * Initialize the Hermes asynchronous engine.
      **/
     async_engine(transport transport_type,
+                 engine_options opts = none,
                  const std::string& bind_address = "",
                  bool listen = false) :
         m_shutdown(false),
         m_listen(listen),
         m_transport(transport_type) {
 
+        // IMPORTANT: this struct needs to be zeroed before use
+        struct hg_init_info hg_options;
+        std::memset(&hg_options, 0, sizeof(hg_options));
+
+        if(opts & use_auto_sm) {
+            hg_options.auto_sm = HG_TRUE;
+        }
+
+        if(opts & print_stats) {
+            hg_options.stats = HG_TRUE;
+        }
+
         m_hg_class = 
                 detail::initialize_mercury(
                         get_transport_prefix(m_transport), 
                         bind_address, 
-                        m_listen);
+                        m_listen,
+                        hg_options);
 
         HERMES_DEBUG2("m_hg_class: {}", static_cast<void*>(m_hg_class));
 
