@@ -18,6 +18,7 @@ class endpoint {
         m_address(address) { }
 
 public:
+    endpoint() {}
     endpoint(const endpoint& /*other*/) = default;
     endpoint& operator=(const endpoint& /*other*/) = default;
     endpoint(endpoint&& /*rhs*/) = default;
@@ -25,12 +26,36 @@ public:
 
     const std::string
     to_string() const {
+        this->validate();
         return m_address->to_string();
     }
 
 private:
+
+    void validate() const {
+        if(this->invalid()) {
+            throw std::runtime_error(
+                    "Endpoint is not associated to a host. Use lookup(host) to "
+                    "properly associate an endpoint to a reachable host.");
+        }
+    }
+
+    explicit operator bool() const noexcept {
+        return !invalid();
+    }
+
+    bool operator!() const noexcept {
+        return invalid();
+    }
+
+    bool
+    invalid() const noexcept {
+        return m_address == nullptr;
+    }
+
     std::shared_ptr<detail::address>
     address() const {
+        this->validate();
         return m_address;
     }
 
