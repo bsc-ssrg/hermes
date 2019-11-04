@@ -68,6 +68,12 @@ create_mercury_context(hg_class_t* hg_class) {
     return hg_context;
 }
 
+using mercury_log_fuction = int(FILE *stream, const char *format, ...);
+
+inline void
+set_mercury_log_function(mercury_log_fuction fn) {
+    ::hg_log_set_func(fn);
+}
 
 inline std::string
 mercury_address_to_string(const hg_class_t* hg_class, 

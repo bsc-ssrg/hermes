@@ -609,6 +609,14 @@ public:
                     output_type(std::forward<Args>(args)...)));
     }
 
+    using mercury_log_fuction = int(FILE *stream, const char *format, ...);
+
+    void
+    set_mercury_log_function(mercury_log_fuction fn) {
+        detail::set_mercury_log_function(fn);
+    }
+
+
 private:
     /**
      * Register RPCs into Mercury so that they can be called by the clients 
