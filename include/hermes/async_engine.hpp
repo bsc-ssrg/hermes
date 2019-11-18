@@ -215,11 +215,20 @@ public:
 
         // if address contains a prefix, make sure that it matches 
         // the transport protocol used by the engine
-
-        const std::size_t pos = addr.find("://");
+        const auto pos = addr.rfind("://");
 
         if(pos != std::string::npos) {
-            if(addr.substr(0, pos+3) != get_transport_lookup_prefix(m_transport)) {
+            // multiple URIs may be part of address string (e.g., if auto_sm is used)
+            auto pos_delim = addr.rfind(';');
+            std::string transport_substr{};
+            if (pos_delim != std::string::npos) {
+                // auto_sm address is used
+                assert(pos_delim < pos);
+                transport_substr = addr.substr(pos_delim + 1, (pos - pos_delim) + 2);
+            } else
+                transport_substr = addr.substr(0, pos + 3);
+
+            if(transport_substr != get_transport_lookup_prefix(m_transport)) {
                 throw std::runtime_error("Transport protocol provided by address "
                                          "does not match engine's configured "
                                          "tranport");
