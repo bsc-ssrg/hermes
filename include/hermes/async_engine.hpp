@@ -219,7 +219,12 @@ public:
 
         if (pos != std::string::npos) {
             // multiple URIs may be part of address string (e.g., if auto_sm is used)
-            auto pos_delim = addr.rfind(';');
+            // address delimiter defined in private Mercury header: src/mercury_core.c
+            auto pos_delim = addr.rfind('#');
+            if (pos_delim == std::string::npos) {
+                // try address delimiter of older Mercury versions
+                pos_delim = addr.rfind(';');
+            }
             std::string transport_substr{};
             if (pos_delim != std::string::npos) {
                 // auto_sm address is used
