@@ -236,9 +236,10 @@ public:
             }
 
             if (transport_substr != get_transport_lookup_prefix(m_transport)) {
-                throw std::runtime_error("Transport protocol provided by address "
-                                         "does not match engine's configured "
-                                         "tranport");
+                throw std::runtime_error(
+                    "Transport protocol '" + transport_substr + "' in "
+                    "address does not match engine's configured tranport '" +
+                    get_transport_lookup_prefix(m_transport) + "'");
             }
         }
 
