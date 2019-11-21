@@ -75,7 +75,12 @@ struct address {
 
     std::string
     to_string() const {
-        return detail::mercury_address_to_string(m_hg_class, m_hg_addr);
+        try {
+            return detail::mercury_address_to_string(m_hg_class, m_hg_addr);
+        }
+        catch(const std::exception& ex) {
+            return "[[unknown_address]]";
+        }
     }
 
     const hg_class_t* m_hg_class;
