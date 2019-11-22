@@ -114,7 +114,7 @@ std::array<
     std::make_tuple(
             transport::ofi_psm2,
             "ofi+psm2://",
-            "ofi+psm2://fi_addr_psmx2://"
+            "ofi+psm2://"
             ),
     std::make_tuple(
             transport::ofi_gni,
