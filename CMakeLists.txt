@@ -38,11 +38,14 @@ endif()
 ###   set(CMAKE_BUILD_TYPE Release CACHE STRING ${doc})
 ### endif ()
 
+include(CMakeDependentOption)
+
 # Options that control how to build
 option(HERMES_PEDANTIC "Enable extra warnings and expensive tests." OFF)
 option(HERMES_WERROR "Halt the compilation with an error on compiler warnings." OFF)
 option(HERMES_EXAMPLES "Build the examples." OFF)
 option(HERMES_LOGGING "Enable logging messages (using the fmt library)" OFF)
+cmake_dependent_option(HERMES_USE_BUNDLED_FMT "Use the fmt library bundled with the package instead of the system one" OFF "HERMES_LOGGING" OFF)
 
 # Options that control generation of various targets.
 option(HERMES_DOC "Generate the doc target." ${MASTER_PROJECT})
@@ -91,13 +94,24 @@ endif()
 find_package(Mercury REQUIRED)
 
 if (HERMES_LOGGING)
-  find_package(fmt 5.0)
-  
-  if(fmt_FOUND)
-    target_compile_definitions(hermes INTERFACE HAVE_FMT=1 HERMES_DEBUG_BUILD=1)
-    target_link_libraries(hermes INTERFACE fmt)
+  if(HERMES_USE_BUNDLED_FMT)
+    target_compile_definitions(hermes INTERFACE HERMES_DEBUG_BUILD=1)
+    add_library(fmt_bundled INTERFACE)
+    # we cannot use target_include_directories with CMake < 3.11
+    set_target_properties(fmt_bundled
+      PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/externals/fmt/include"
+    )
+    target_compile_definitions(hermes INTERFACE FMT_HEADER_ONLY=1)
+    target_link_libraries(hermes INTERFACE fmt_bundled)
   else()
-    target_compile_definitions(hermes INTERFACE HAVE_FMT=0)
+    find_package(fmt 5.0)
+    if(fmt_FOUND)
+      target_compile_definitions(hermes INTERFACE HERMES_DEBUG_BUILD=1)
+      target_link_libraries(hermes INTERFACE fmt::fmt)
+    else()
+      target_compile_definitions(hermes INTERFACE)
+    endif()
   endif()
 endif()
 
