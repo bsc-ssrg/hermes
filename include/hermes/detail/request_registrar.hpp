@@ -22,15 +22,6 @@ public:
 
     static request_registrar<Key, Value>& 
     singleton() {
-
-#ifdef HERMES_DEBUG_BUILD
-        char* v = getenv("HERMES_LOG_LEVEL");
-
-        if(v != NULL) {
-            logging::set_debug_output_level(std::stoul(v));
-        }
-#endif
-
         static request_registrar<Key, Value> instance;
         return instance;
     }
