@@ -80,7 +80,18 @@ public:
      * Initialize the Hermes asynchronous engine.
      **/
     async_engine(transport transport_type,
-                 engine_options opts = none,
+                 const std::string& bind_address = "",
+                 bool listen = false) :
+        async_engine(transport_type, 
+                     engine_options::__none,
+                     bind_address,
+                     listen) { }
+
+    /**
+     * Initialize the Hermes asynchronous engine.
+     **/
+    async_engine(transport transport_type,
+                 engine_options opts,
                  const std::string& bind_address = "",
                  bool listen = false) :
         m_shutdown(false),
