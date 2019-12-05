@@ -45,7 +45,7 @@ option(HERMES_PEDANTIC "Enable extra warnings and expensive tests." OFF)
 option(HERMES_WERROR "Halt the compilation with an error on compiler warnings." OFF)
 option(HERMES_EXAMPLES "Build the examples." OFF)
 option(HERMES_LOGGING "Enable logging messages (using the fmt library)" OFF)
-cmake_dependent_option(HERMES_USE_BUNDLED_FMT "Use the fmt library bundled with the package instead of the system one" OFF "HERMES_LOGGING" OFF)
+cmake_dependent_option(HERMES_USE_BUNDLED_FMT "Use the fmt library bundled with hermes instead of the one installed on the system" OFF "HERMES_LOGGING" OFF)
 
 # Options that control generation of various targets.
 option(HERMES_DOC "Generate the doc target." ${MASTER_PROJECT})
@@ -102,7 +102,7 @@ if (HERMES_LOGGING)
       PROPERTIES
       INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/externals/fmt/include"
     )
-    target_compile_definitions(hermes INTERFACE FMT_HEADER_ONLY=1)
+    target_compile_definitions(fmt_bundled INTERFACE FMT_HEADER_ONLY=1)
     target_link_libraries(hermes INTERFACE fmt_bundled)
   else()
     find_package(fmt 5.0)
