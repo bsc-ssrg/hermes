@@ -357,15 +357,15 @@ public:
         HERMES_DEBUG2("  m_size = {},", m_size);
         HERMES_DEBUG2("  m_bulk_handle = {}, (ref_count:{})",
                       fmt::ptr(m_bulk_handle), get_ref_count(m_bulk_handle));
-        HERMES_DEBUG2("  m_buffers = {");
+        HERMES_DEBUG2("  m_buffers = {{");
 
         for(auto&& b : m_buffers) {
             (void) b;
             HERMES_DEBUG2("    {{data={}, size={}}},", 
                           fmt::ptr(b.data()), b.size());
         }
-        HERMES_DEBUG2("  },");
-        HERMES_DEBUG2("};");
+        HERMES_DEBUG2("  }},");
+        HERMES_DEBUG2("}};");
     }
 #endif
 
