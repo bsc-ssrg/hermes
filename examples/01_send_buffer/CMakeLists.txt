@@ -7,8 +7,14 @@ target_sources(01_send_buffer_client
         rpcs.hpp
         rpcs.cpp
 )
-target_link_libraries(01_send_buffer_client hermes)
+target_link_libraries(01_send_buffer_client
+    PUBLIC
+        hermes
+    PRIVATE
+        common
+)
 add_sanitizers(01_send_buffer_client)
+target_compile_features(01_send_buffer_client PRIVATE cxx_std_14)
 
 add_executable(01_send_buffer_server "")
 target_sources(01_send_buffer_server 
@@ -17,8 +23,14 @@ target_sources(01_send_buffer_server
         rpcs.hpp
         rpcs.cpp
 )
-target_link_libraries(01_send_buffer_server hermes)
+target_link_libraries(01_send_buffer_server 
+    PUBLIC
+        hermes
+    PRIVATE
+        common
+)
 add_sanitizers(01_send_buffer_server)
+target_compile_features(01_send_buffer_server PRIVATE cxx_std_14)
 
 add_custom_command(
   TARGET 01_send_buffer_client POST_BUILD

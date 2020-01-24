@@ -7,6 +7,7 @@
 #include <hermes.hpp>
 
 #include "rpcs.hpp"
+#include "common.hpp"
 
 std::atomic<bool> shutdown_requested(false);
 
@@ -71,6 +72,19 @@ parse_args(int argc, char* argv[]) {
 int
 main(int argc, char* argv[]) {
 
+#ifdef HERMES_ENABLE_LOGGING
+    hermes::log::logger::register_callback(hermes::log::info, common::log_info);
+    hermes::log::logger::register_callback(hermes::log::warning, common::log_warning);
+    hermes::log::logger::register_callback(hermes::log::error, common::log_error);
+    hermes::log::logger::register_callback(hermes::log::fatal, common::log_fatal);
+
+#ifdef HERMES_DEBUG_BUILD
+    hermes::log::logger::register_callback(hermes::log::debug, common::log_debug);
+#endif // HERMES_DEBUG_BUILD
+
+    hermes::log::logger::register_callback(hermes::log::mercury, common::log_mercury);
+#endif // HERMES_ENABLE_LOGGING
+
     try {
 
         hermes::transport tr;
@@ -108,7 +122,7 @@ main(int argc, char* argv[]) {
                 hermes::exposed_memory local_buffers =
                     hg.expose(bufseq, hermes::access_mode::write_only);
 
-                sleep(120);
+                //sleep(120);
 
                 std::cout << "  Pulling remote buffers\n";
 

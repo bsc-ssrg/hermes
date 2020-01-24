@@ -9,65 +9,7 @@
 #include <hermes.hpp>
 
 #include "rpcs.hpp"
-
-struct fmt_logger : 
-    public hermes::log::logger_interface<fmt_logger, hermes::log::logger> {
-
-    fmt_logger() {
-        char* v = std::getenv("HERMES_LOG_LEVEL");
-
-        if(v != NULL) {
-            m_debug_output_level = std::stoul(v);
-        }
-    }
-
-    void
-    info(const std::string& msg) const override final {
-        fmt::print(stdout, "INFO: {}", msg);
-    }
-
-    void
-    warning(const std::string& msg) const override final {
-        fmt::print(stdout, "WARNING: {}", msg);
-    }
-
-    void
-    error(const std::string& msg) const override final {
-        fmt::print(stdout, "ERROR: {}", msg);
-    }
-
-    void
-    fatal(const std::string& msg) const override final {
-        fmt::print(stderr, "FATAL: {}", msg);
-    }
-
-#ifdef HERMES_DEBUG_BUILD
-    void
-    debug(int level, const char* file, const char* func, int line, 
-               const std::string& msg) const override final {
-
-        (void) line;
-
-        if(level <= m_debug_output_level) {
-            fmt::print(stdout, "[{}:{}()] [{}] {}{}: {}\n", file,  func,
-                       std::this_thread::get_id(), "DEBUG", level, msg);
-        }
-    }
-#endif
-
-    int
-    mercury_log(std::FILE* stream, const char* fmt, 
-                ::va_list ap) const override final { 
-
-        char buffer[256];
-        vsnprintf(buffer, sizeof(buffer), fmt, ap);
-        fmt::print(stream, "mercury: {}", buffer);
-
-        return 0;
-    }
-
-    int m_debug_output_level = 1;
-};
+#include "common.hpp"
 
 std::tuple<hermes::transport, std::string>
 parse_args(int argc, char* argv[]) {
@@ -114,9 +56,6 @@ parse_args(int argc, char* argv[]) {
     }
 }
 
-HERMES_REGISTER_LOGGER(fmt_logger);
-
-
 int
 main(int argc, char* argv[]) {
 
@@ -127,6 +66,19 @@ main(int argc, char* argv[]) {
     //using hermes::rpc;
     using hermes::access_mode;
     //using hermes::send_buffer_args;
+
+#ifdef HERMES_ENABLE_LOGGING
+    hermes::log::logger::register_callback(hermes::log::info, common::log_info);
+    hermes::log::logger::register_callback(hermes::log::warning, common::log_warning);
+    hermes::log::logger::register_callback(hermes::log::error, common::log_error);
+    hermes::log::logger::register_callback(hermes::log::fatal, common::log_fatal);
+
+#ifdef HERMES_DEBUG_BUILD
+    hermes::log::logger::register_callback(hermes::log::debug, common::log_debug);
+#endif // HERMES_DEBUG_BUILD
+
+    hermes::log::logger::register_callback(hermes::log::mercury, common::log_mercury);
+#endif // HERMES_ENABLE_LOGGING
 
     hermes::transport tr;
     std::string target_address;
