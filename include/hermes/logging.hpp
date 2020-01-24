@@ -1,5 +1,17 @@
-#ifndef __LOGGING_HPP__
-#define __LOGGING_HPP__
+#ifndef HERMES_LOGGING_HPP
+#define HERMES_LOGGING_HPP
+
+/* noop macros for logging */
+#define HERMES_INFO(...) do { } while(0); 
+#define HERMES_WARNING(...) do { } while(0);
+#define HERMES_ERROR(...) do { } while(0);
+#define HERMES_FATAL(...) do { } while(0);
+#define HERMES_DEBUG(...) do { } while(0); 
+#define HERMES_DEBUG2(...) HERMES_DEBUG(__VA_ARGS__)
+#define HERMES_DEBUG3(...) HERMES_DEBUG(__VA_ARGS__)
+#define HERMES_DEBUG4(...) HERMES_DEBUG(__VA_ARGS__)
+
+#ifdef HERMES_ENABLE_LOGGING
 
 #include <fmt/format.h>
 #include <fmt/ostream.h>
@@ -16,212 +28,212 @@ void set_mercury_log_function(mercury_log_fuction);
 
 } // namespace detail
 
-template <typename Derived, typename Base>
-class cloneable : public Base {
-
-public:
-
-    virtual
-    ~cloneable() = default;
-
-    std::unique_ptr<Derived>
-    clone() const {
-        return std::unique_ptr<Derived>(
-                static_cast<Derived*>(this->clone_impl()));
-    }
-
-private:
-    virtual cloneable*
-    clone_impl() const override final {
-        return new Derived(static_cast<const Derived&>(*this));
-    }
-};
-
 namespace log {
 
-    template <typename Derived, typename Base>
-    using logger_interface = cloneable<Derived, Base>;
-
-    static int mercury_log_hook(FILE* stream, const char* fmt, ...);
-
-    /*! abstract interface for pluggable loggers  */
-    struct logger {
-
-        logger() {
-            detail::set_mercury_log_function(mercury_log_hook);
-        }
-
-        virtual ~logger() = default;
-
-        template <typename... Args>
-        static std::string
-        format(const char* fmt, Args&&... args) {
-            return fmt::format(fmt, std::forward<Args>(args)...);
-        }
-
-        virtual void
-        info(const std::string& msg) const = 0;
-
-        virtual void
-        warning(const std::string& msg) const = 0;
-
-        virtual void
-        error(const std::string& msg) const = 0;
-        
-        virtual void
-        fatal(const std::string& msg) const = 0;
-        
+enum class level : int {
+    info = 0,
+    warning,
+    error,
+    fatal,
 #ifdef HERMES_DEBUG_BUILD
-        virtual void
-        debug(int level, const char* file, const char* func, 
-              int line, const std::string& msg) const = 0;
+    debug,
 #endif
-        
-        virtual int
-        mercury_log(std::FILE* stream, const char* fmt, ::va_list ap) const = 0;
+    mercury,
+    max
+};
 
-        std::unique_ptr<logger> clone() const {
-            return std::unique_ptr<logger>(this->clone_impl());
-        }
-
-private:
-        virtual logger* clone_impl() const = 0;
-
-    };
-
-    /* no op logger */
-    struct nop_logger : public logger_interface<nop_logger, logger> {
-
-        void 
-        info(const std::string&) const override final { }
-
-        void 
-        error(const std::string&) const override final { }
-
-        void 
-        warning(const std::string&) const override final { }
-
-        void 
-        fatal(const std::string&) const override final { }
+static constexpr auto info = level::info;
+static constexpr auto warning = level::warning;
+static constexpr auto error = level::error;
+static constexpr auto fatal = level::fatal;
 
 #ifdef HERMES_DEBUG_BUILD
-        void 
-        debug(int, const char*, const char*, int, 
-              const std::string&) const override final { }
+static constexpr auto debug = level::debug;
 #endif
 
-        int
-        mercury_log(FILE*, const char*, va_list) const override final { 
-            return 0;
-        }
+static constexpr auto mercury = level::mercury;
 
+struct logger;
+
+using log_callback = 
+    std::function<
+        void(const std::string&,  // message
+             log::level,          // level
+             int,                 // severity
+             const std::string&,  // file name
+             const std::string&,  // function name
+             int                  // line number
+    )>;
+
+class logger {
+
+    enum { mercury_message_size = 1024 };
+
+    static int mercury_log_hook(FILE* stream, const char* fmt, ...) {
+
+        (void) stream;
+
+        char buffer[mercury_message_size];
+
+        va_list ap;
+        va_start(ap, fmt);
+        const int n = vsnprintf(buffer, sizeof(buffer), fmt, ap);
+        get().mercury_log(buffer);
+        va_end(ap);
+
+        return n;
+    }
+
+    struct noop {
+        struct anything {
+            template <class T>
+            operator T() { return {}; }
+        };
+
+        template<class...Args>
+        anything operator()(Args&&...) const {
+            return {};
+        }
     };
 
-    static inline std::shared_ptr<logger>&
-    shared_logger() {
-        static std::shared_ptr<logger> _ = std::make_shared<nop_logger>();
+public:
+    logger() :
+        m_log_callbacks({
+                noop{}, noop{}, noop{}, noop{}, 
+#ifdef HERMES_DEBUG_BUILD
+                noop{}, 
+#endif
+                noop{}}) {
+
+        detail::set_mercury_log_function(mercury_log_hook);
+    }
+
+    static logger&
+    get() {
+        static logger _;
         return _;
     }
 
-    static inline logger&
-    register_shared_logger(const logger& logger) {
-        shared_logger() = logger.clone();
-        return *shared_logger();
+    template <typename Callback>
+    static void
+    register_callback(level l, Callback&& cb) {
+        get().add_callback(l, std::forward<Callback>(cb));
     }
 
-    static inline logger&
-    get_shared_logger() {
-        return *shared_logger();
+public:
+
+    template <typename... Args>
+    static std::string
+    format(const char* fmt, Args&&... args) {
+        return fmt::format(fmt, std::forward<Args>(args)...);
     }
 
-    static int mercury_log_hook(FILE* stream, const char* fmt, ...) {
-        va_list ap;
-        va_start(ap, fmt);
-        const int rv = shared_logger()->mercury_log(stream, fmt, ap);
-        va_end(ap);
-
-        return rv;
+    void
+    info(const std::string& msg) const { 
+        const int l = static_cast<int>(level::info);
+        m_log_callbacks.at(l)(msg, level::info, 0, "", "", -1);
     }
+
+    void
+    warning(const std::string& msg) const { 
+        const int l = static_cast<int>(level::warning);
+        m_log_callbacks.at(l)(msg, level::warning, 0, "", "", -1);
+    }
+
+    void
+    error(const std::string& msg) const { 
+        const int l = static_cast<int>(level::error);
+        m_log_callbacks.at(l)(msg, level::error, 0, "", "", -1);
+    }
+    
+    void
+    fatal(const std::string& msg) const { 
+        const int l = static_cast<int>(level::fatal);
+        m_log_callbacks.at(l)(msg, level::fatal, 0, "", "", -1);
+    }
+    
+#ifdef HERMES_DEBUG_BUILD
+    void
+    debug(int level, const char* file, const char* func, 
+          int line, const std::string& msg) const {
+        const int l = static_cast<int>(level::debug);
+        m_log_callbacks.at(l)(msg, level::debug, level, file, func, line);
+    }
+#endif
+    
+    void
+    mercury_log(const std::string& msg) const { 
+        const int l = static_cast<int>(level::mercury);
+        m_log_callbacks.at(l)(msg, level::mercury, 0, "", "", -1);
+    }
+
+private:
+
+    template <typename Callback>
+    void
+    add_callback(level l, Callback&& cb) {
+        m_log_callbacks[static_cast<int>(l)] = std::forward<Callback>(cb);
+    }
+
+private:
+    using callback_set = 
+        std::array<log_callback, static_cast<int>(level::max)>;
+
+    callback_set m_log_callbacks;
+};
 
 } // namespace log
 } // namespace hermes
 
-#define HERMES_REGISTER_LOGGER(type)                     \
-    namespace {                                          \
-        const static auto& _ =                           \
-            hermes::log::register_shared_logger(type{}); \
-    }
-
+#undef HERMES_INFO
 #define HERMES_INFO(...) \
     do { \
         using namespace hermes::log; \
-        get_shared_logger().info(logger::format(__VA_ARGS__)); \
+        logger::get().info(logger::format(__VA_ARGS__)); \
     } while(0);
 
 
+#undef HERMES_WARNING
 #define HERMES_WARNING(...) \
     do { \
         using namespace hermes::log; \
-        get_shared_logger().warning(logger::format(__VA_ARGS__)); \
+        logger::get().warning(logger::format(__VA_ARGS__)); \
     } while(0);
 
+#undef HERMES_ERROR
 #define HERMES_ERROR(...) \
     do { \
         using namespace hermes::log; \
-        get_shared_logger().error(logger::format(__VA_ARGS__)); \
+        logger::get().error(logger::format(__VA_ARGS__)); \
     } while(0);
 
-
+#undef HERMES_FATAL
 #define HERMES_FATAL(...) \
     do { \
         using namespace hermes::log; \
-        get_shared_logger().fatal(logger::format(__VA_ARGS__)); \
+        logger::get().fatal(logger::format(__VA_ARGS__)); \
     } while(0);
-
-#ifdef HERMES_DEBUG_BUILD
-
-#define HERMES_DEBUG(...) \
-    HERMES_DEBUG_HELPER(1u, __VA_ARGS__);
-
-#define HERMES_DEBUG2(...) \
-    HERMES_DEBUG_HELPER(2u, __VA_ARGS__);
-
-
-#define HERMES_DEBUG3(...) \
-    HERMES_DEBUG_HELPER(3u, __VA_ARGS__);
-
-#define HERMES_DEBUG4(...) \
-    HERMES_DEBUG_HELPER(4u, __VA_ARGS__);
 
 #define HERMES_DEBUG_HELPER(level, ...)                                       \
     do {                                                                      \
         __typeof(level) l = (level);                                          \
-        hermes::log::get_shared_logger().debug(l, __FILE__, __func__,         \
-                __LINE__, log::logger::format(__VA_ARGS__));  \
+        hermes::log::logger::get().debug(                                     \
+                l, __FILE__, __func__,                                        \
+                __LINE__, log::logger::format(__VA_ARGS__));                  \
     } while(0);
 
-#define HERMES_DEBUG_FLUSH()    \
-    do {                        \
-        ::flush(stdout);        \
-    } while(0);
+#undef HERMES_DEBUG
+#define HERMES_DEBUG(...) HERMES_DEBUG_HELPER(0u, __VA_ARGS__);
 
-#else // ! HERMES_DEBUG_BUILD
+#undef HERMES_DEBUG2
+#define HERMES_DEBUG2(...) HERMES_DEBUG_HELPER(1u, __VA_ARGS__);
 
-#define HERMES_DEBUG(...)       \
-    do { } while(0); 
+#undef HERMES_DEBUG3
+#define HERMES_DEBUG3(...) HERMES_DEBUG_HELPER(2u, __VA_ARGS__);
 
-#define HERMES_DEBUG2(...)     \
-    HERMES_DEBUG(__VA_ARGS__)
+#undef HERMES_DEBUG4
+#define HERMES_DEBUG4(...) HERMES_DEBUG_HELPER(3u, __VA_ARGS__);
 
-#define HERMES_DEBUG3(...)      \
-    HERMES_DEBUG(__VA_ARGS__)
+#endif // HERMES_ENABLE_LOGGING
 
-#define HERMES_DEBUG4(...)      \
-    HERMES_DEBUG(__VA_ARGS__)
-
-#define HERMES_DEBUG_FLUSH()    \
-    do { } while(0);
-
-#endif // HERMES_DEBUG_BUILD
-
-#endif // __LOGGING_HPP__
+#endif // HERMES_LOGGING_HPP
