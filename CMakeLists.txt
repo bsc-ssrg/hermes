@@ -12,7 +12,7 @@ endif()
 set(MASTER_PROJECT OFF)
 if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
   set(MASTER_PROJECT ON)
-  message("[hermes] CMake version: ${CMAKE_VERSION}")
+  message(STATUS "[hermes] CMake version: ${CMAKE_VERSION}")
 endif ()
 
 # set default build type and also populate a list of available options
@@ -30,7 +30,7 @@ endif()
 project(HERMES 
         VERSION 0.1)
 
-message("[hermes] Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "[hermes] Build type: ${CMAKE_BUILD_TYPE}")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -81,40 +81,35 @@ find_package(Mercury REQUIRED)
 target_link_libraries(hermes INTERFACE mercury)
 
 if(HERMES_LOGGING)
-  target_compile_definitions(hermes INTERFACE HERMES_ENABLE_LOGGING)
-  if(HERMES_LOGGING_USE_BUNDLED_FMT)
-    target_compile_definitions(hermes INTERFACE HERMES_LOGGING_USE_BUNDLED_FMT)
-    add_subdirectory(externals/fmt)
+  if(HERMES_LOGGING_FMT_HEADER_ONLY)
+    set(HERMES_FMT_LINK_TYPE "(header only)")
+  else()
+    set(HERMES_FMT_LINK_TYPE "(library)")
+  endif()
 
-    if(HERMES_LOGGING_FMT_HEADER_ONLY)
-      message("[hermes] Logging enabled using bundled fmt (header only)")
-      target_link_libraries(hermes INTERFACE fmt::fmt-header-only)
-    else()
-      message("[hermes] Logging enabled using bundled fmt (library)")
-      target_link_libraries(hermes INTERFACE fmt::fmt)
-    endif()
+  target_compile_definitions(hermes INTERFACE HERMES_ENABLE_LOGGING)
+
+  if(HERMES_LOGGING_USE_BUNDLED_FMT)
+    message(STATUS "[hermes] Logging enabled using bundled fmt ${HERMES_FMT_LINK_TYPE}")
+    add_subdirectory(externals/fmt)
+    target_compile_definitions(hermes INTERFACE HERMES_LOGGING_USE_BUNDLED_FMT)
   else()
     if(TARGET fmt::fmt AND TARGET fmt::fmt-header-only)
-      if(HERMES_LOGGING_FMT_HEADER_ONLY)
-        message("[hermes] Logging enabled using external fmt (header only)")
-        target_link_libraries(hermes INTERFACE fmt::fmt-header-only)
-      else()
-        message("[hermes] Logging enabled using external fmt (library)")
-        target_link_libraries(hermes INTERFACE fmt::fmt)
-      endif()
+      message(STATUS "[hermes] Logging enabled using external fmt ${HERMES_FMT_LINK_TYPE}")
     else()
+      message(STATUS "[hermes] Logging enabled using installed fmt ${HERMES_FMT_LINK_TYPE}")
       find_package(fmt 5.3 REQUIRED)
-      if(fmt_FOUND)
-        if(HERMES_LOGGING_FMT_HEADER_ONLY)
-          message("[hermes] Logging enabled using installed fmt (header only)")
-          target_link_libraries(hermes INTERFACE fmt::fmt-header-only)
-        else()
-          message("[hermes] Logging enabled using installed fmt (library)")
-          target_link_libraries(hermes INTERFACE fmt::fmt)
-        endif()
-      endif()
     endif()
   endif()
+
+  target_link_libraries(hermes 
+      INTERFACE 
+      $<IF:$<BOOL:${HERMES_LOGGING_FMT_HEADER_ONLY}>,
+          fmt::fmt-header-only,
+          fmt::fmt>
+  )
+
+  unset(HERMES_FMT_LINK_TYPE)
 endif()
 
 find_package(Sanitizers)
