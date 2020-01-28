@@ -6,6 +6,7 @@ option(HERMES_BUILD_WERROR "Halt the compilation with an error on compiler warni
 option(HERMES_BUILD_EXAMPLES "Build the examples." OFF)
 option(HERMES_LOGGING "Enable logging messages (using the fmt library)" OFF)
 cmake_dependent_option(HERMES_LOGGING_USE_BUNDLED_FMT "Use the fmt library bundled with hermes instead of the one installed on the system" ON "HERMES_LOGGING" OFF)
+cmake_dependent_option(HERMES_LOGGING_FMT_HEADER_ONLY "Use the fmt library as header-only" OFF "HERMES_LOGGING" OFF)
 
 # Options that control generation of various targets.
 option(HERMES_DOC "Generate the doc target." ${MASTER_PROJECT})
