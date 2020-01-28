@@ -214,6 +214,8 @@ private:
         logger::get().fatal(logger::format(__VA_ARGS__)); \
     } while(0);
 
+#ifdef HERMES_DEBUG_BUILD
+
 #define HERMES_DEBUG_HELPER(level, ...)                                       \
     do {                                                                      \
         __typeof(level) l = (level);                                          \
@@ -233,6 +235,8 @@ private:
 
 #undef HERMES_DEBUG4
 #define HERMES_DEBUG4(...) HERMES_DEBUG_HELPER(3u, __VA_ARGS__);
+
+#endif // HERMES_DEBUG_BUILD
 
 #endif // HERMES_ENABLE_LOGGING
 
