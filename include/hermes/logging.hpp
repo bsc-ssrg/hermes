@@ -216,12 +216,13 @@ private:
 
 #ifdef HERMES_DEBUG_BUILD
 
-#define HERMES_DEBUG_HELPER(level, ...)                                       \
-    do {                                                                      \
-        __typeof(level) l = (level);                                          \
-        hermes::log::logger::get().debug(                                     \
-                l, __FILE__, __func__,                                        \
-                __LINE__, log::logger::format(__VA_ARGS__));                  \
+#define HERMES_DEBUG_HELPER(level, ...)                 \
+    do {                                                \
+        using namespace hermes::log;                    \
+        __typeof(level) l = (level);                    \
+        logger::get().debug(                            \
+                l, __FILE__, __func__,                  \
+                __LINE__, logger::format(__VA_ARGS__)); \
     } while(0);
 
 #undef HERMES_DEBUG
