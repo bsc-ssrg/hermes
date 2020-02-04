@@ -12,6 +12,11 @@
 #include <hermes/detail/request_registrar.hpp>
 #include <hermes/detail/request_status.hpp>
 
+#ifdef HERMES_MARGO_COMPATIBLE_MODE
+#include <hermes/detail/margo_compatibility.hpp>
+#endif // HERMES_MARGO_COMPATIBLE_MODE
+
+
 namespace hermes {
 
 // defined elsewhere
@@ -47,6 +52,15 @@ initialize_mercury(const std::string& transport_prefix,
     if(hg_class == NULL) {
         throw std::runtime_error("Failed to initialize Mercury");
     }
+
+#ifdef HERMES_MARGO_COMPATIBLE_MODE
+    // set input offset to include Margo breadcrumbs information in Mercury
+    // requests
+    hg_return_t hret = HG_Class_set_input_offset(hg_class, sizeof(uint64_t));
+
+    // this should not ever fail
+    assert(hret == HG_SUCCESS);
+#endif // HERMES_MARGO_COMPATIBLE_MODE
 
     return hg_class;
 }
@@ -401,6 +415,32 @@ post_to_mercury(ExecutionContext* ctx) {
                                           ctx->m_address->mercury_address(),
                                           Request::mercury_id);
     }
+
+#ifdef HERMES_MARGO_COMPATIBLE_MODE
+    const struct hg_info* hgi = HG_Get_info(ctx->m_handle);
+    hg_id_t id = margo::mux_id(hgi->id, MARGO_DEFAULT_PROVIDER_ID);
+
+    hg_return hret = HG_Reset(ctx->m_handle, hgi->addr, id);
+
+    if(hret != HG_SUCCESS) {
+        HERMES_ERROR("Failed to reset RPC handle");
+        return hret;
+    }
+
+    // add rpc breadcrumb to outbound request; this will be used to track
+    // rpc statistics
+    uint64_t* rpc_breadcrumb;
+
+    hret = HG_Get_input_buf(ctx->m_handle, (void**)&rpc_breadcrumb, NULL);
+
+    if(hret != HG_SUCCESS) {
+        HERMES_ERROR("Failed to retrieve RPC input buffer");
+        return hret;
+    }
+
+    uint64_t bc = margo::breadcrumb_set(hgi->id);
+    *rpc_breadcrumb = htole64(bc);
+#endif // HERMES_MARGO_COMPATIBLE_MODE
 
     hg_return_t ret = HG_Forward(
             // Mercury handle

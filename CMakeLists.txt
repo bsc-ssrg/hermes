@@ -112,4 +112,8 @@ if(HERMES_LOGGING)
   unset(HERMES_FMT_LINK_TYPE)
 endif()
 
+if(HERMES_MARGO_COMPATIBLE_RPCS)
+    target_compile_definitions(hermes INTERFACE HERMES_MARGO_COMPATIBLE_MODE)
+endif()
+
 find_package(Sanitizers)
