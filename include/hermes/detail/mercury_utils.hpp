@@ -3,6 +3,7 @@
 
 // C includes
 #include <mercury.h>
+#include <mercury_log.h>
 
 // project includes
 #include <hermes/logging.hpp>
