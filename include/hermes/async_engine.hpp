@@ -238,9 +238,14 @@ public:
             }
             std::string transport_substr{};
             if (pos_delim != std::string::npos) {
-                // auto_sm address is used
-                assert(pos_delim < pos);
-                transport_substr = addr.substr(pos_delim + 1, (pos - pos_delim) + 2);
+                // handle ofi+verbs special cases which uses the `;` character: ofi+verbs;ofi_rxm://
+                if (m_transport == transport::ofi_verbs) {
+                    transport_substr = addr.substr(0, pos_delim) + addr.substr(pos, 3);
+                } else {
+                    // auto_sm address is used
+                    assert(pos_delim < pos);
+                    transport_substr = addr.substr(pos_delim + 1, (pos - pos_delim) + 2);
+                }
             }
             else {
                 transport_substr = addr.substr(0, pos + 3);

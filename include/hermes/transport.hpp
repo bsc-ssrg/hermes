@@ -109,7 +109,7 @@ std::array<
     std::make_tuple(
             transport::ofi_verbs,
             "ofi+verbs://",
-            "ofi+verbs;ofi_rxm://fi_sockaddr_in://"
+            "ofi+verbs://"
             ),
     std::make_tuple(
             transport::ofi_psm2,
