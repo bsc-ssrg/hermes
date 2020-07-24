@@ -99,8 +99,7 @@ public:
         m_transport(transport_type) {
 
         // IMPORTANT: this struct needs to be zeroed before use
-        struct hg_init_info hg_options;
-        std::memset(&hg_options, 0, sizeof(hg_options));
+        struct hg_init_info hg_options = HG_INIT_INFO_INITIALIZER;
 
         if(opts & use_auto_sm) {
             hg_options.auto_sm = HG_TRUE;
@@ -110,7 +109,11 @@ public:
             hg_options.stats = HG_TRUE;
         }
 
-        m_hg_class = 
+        if (opts & force_no_block_progress) {
+            hg_options.na_init_info.progress_mode = NA_NO_BLOCK;
+        }
+
+        m_hg_class =
                 detail::initialize_mercury(
                         get_transport_prefix(m_transport), 
                         bind_address, 

@@ -7,6 +7,7 @@ enum __engine_opts {
     __none             = 0,
     __use_auto_sm      = 1L << 0,
     __print_stats      = 1L << 1,
+    __force_no_block_progress = 1L << 2,
     __engine_opts_end = 1L << 16,
     __engine_opts_max = __INT_MAX__,
     __engine_opts_min = ~__INT_MAX__
@@ -51,6 +52,7 @@ using engine_options = __engine_opts;
 
 static const constexpr engine_options none = __engine_opts::__none;
 static const constexpr engine_options use_auto_sm = __engine_opts::__use_auto_sm;
+static const constexpr engine_options force_no_block_progress = __engine_opts::__force_no_block_progress;
 static const constexpr engine_options print_stats = __engine_opts::__print_stats;
 
 } // namespace hermes
