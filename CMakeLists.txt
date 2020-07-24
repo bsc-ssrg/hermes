@@ -28,7 +28,7 @@ endif()
 
 # define project
 project(HERMES 
-        VERSION 0.4.2)
+        VERSION 0.4.3)
 
 message(STATUS "[hermes] Version: ${HERMES_VERSION}")
 message(STATUS "[hermes] Build type: ${CMAKE_BUILD_TYPE}")
