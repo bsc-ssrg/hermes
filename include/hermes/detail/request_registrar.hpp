@@ -20,7 +20,7 @@ class request_registrar {
 public:
     using const_iterator = typename map_t::const_iterator;
 
-    static request_registrar<Key, Value>& 
+    static request_registrar<Key, Value>&
     singleton() {
         static request_registrar<Key, Value> instance;
         return instance;
@@ -39,12 +39,23 @@ public:
         HERMES_DEBUG2("Adding new request type (id={}, name={})", id, name);
 
         if(m_request_types.count(id) != 0) {
+            // if the request type we want to add is identical to the one
+            // already registered, just ignore the request
+            const auto& r = m_request_types.at(id);
+
+            if(mercury_id == r->m_mercury_id && name == r->m_name &&
+               requires_response == r->m_requires_response &&
+               mercury_in_proc_cb == r->m_mercury_input_cb &&
+               mercury_out_proc_cb == r->m_mercury_output_cb) {
+                return true;
+            }
+
             throw std::runtime_error("Failed to add request type: duplicate id");
         }
 
-        m_request_types.emplace(id, 
+        m_request_types.emplace(id,
                 std::make_shared<request_descriptor<Request>>(
-                    id, mercury_id, name, requires_response, 
+                    id, mercury_id, name, requires_response,
                     mercury_in_proc_cb, mercury_out_proc_cb));
 
         return true;
