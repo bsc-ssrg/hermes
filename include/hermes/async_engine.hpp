@@ -353,7 +353,7 @@ public:
         // TODO: this waits on each individual lookup. Make it so that
         // all lookups are posted to mercury and we only wait once on
         // total completion
-        for(const auto addr : unique_addrs) {
+        for(const auto& addr : unique_addrs) {
             endps.emplace_back(lookup(addr));
         }
 
