@@ -79,7 +79,7 @@ endif()
 
 # 
 find_package(Mercury REQUIRED)
-target_link_libraries(hermes INTERFACE mercury)
+target_link_libraries(hermes INTERFACE Mercury::Mercury)
 
 if(HERMES_LOGGING)
   if(HERMES_LOGGING_FMT_HEADER_ONLY)
