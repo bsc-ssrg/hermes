@@ -15,6 +15,7 @@
 #include <chrono>
 #include <algorithm>
 #include <cstring>
+#include <array>
 
 // C includes
 #include <mercury.h>
