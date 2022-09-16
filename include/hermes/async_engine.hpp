@@ -114,6 +114,10 @@ public:
             hg_options.na_init_info.progress_mode = NA_NO_BLOCK;
         }
 
+        if (opts & fork_save) {
+            m_parent_pid = getpid();
+        }
+
         m_hg_class =
                 detail::initialize_mercury(
                         get_transport_prefix(m_transport), 
@@ -172,6 +176,11 @@ public:
                 HERMES_ERROR("Failed to destroy context: {}\n",
                              HG_Error_to_string(err));
             }
+        }
+        
+        // Avoid finalizing mercury in a child
+        if (m_parent_pid != 0 && m_parent_pid != getpid()) {
+            return ;
         }
 
         if(m_hg_class != NULL) {
@@ -733,6 +742,7 @@ private:
     const transport m_transport;
     std::unique_ptr<detail::address> m_self_address;
     std::thread m_runner;
+    pid_t m_parent_pid = 0;
 
     mutable std::mutex m_addr_cache_mutex;
     mutable std::unordered_map<
