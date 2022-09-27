@@ -114,7 +114,7 @@ public:
             hg_options.na_init_info.progress_mode = NA_NO_BLOCK;
         }
 
-        if (opts & fork_save) {
+        if (opts & process_may_fork) {
             m_parent_pid = getpid();
         }
 
