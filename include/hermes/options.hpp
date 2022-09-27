@@ -8,6 +8,7 @@ enum __engine_opts {
     __use_auto_sm      = 1L << 0,
     __print_stats      = 1L << 1,
     __force_no_block_progress = 1L << 2,
+    __process_may_fork = 1L << 3,
     __engine_opts_end = 1L << 16,
     __engine_opts_max = __INT_MAX__,
     __engine_opts_min = ~__INT_MAX__
@@ -54,7 +55,7 @@ static const constexpr engine_options none = __engine_opts::__none;
 static const constexpr engine_options use_auto_sm = __engine_opts::__use_auto_sm;
 static const constexpr engine_options force_no_block_progress = __engine_opts::__force_no_block_progress;
 static const constexpr engine_options print_stats = __engine_opts::__print_stats;
-
+static const constexpr engine_options process_may_fork = __engine_opts::__process_may_fork;
 } // namespace hermes
 
 #endif // __HERMES_OPTION_HPP__
