@@ -1,0 +1,116 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 19,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "default",
+      "description": "Sets prefix, build, and install directories as well as common options",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/builds/${presetName}",
+      "cacheVariables": {
+        "HERMES_BUILD_EXAMPLES": true,
+        "HERMES_LOGGING": true,
+        "HERMES_LOGGING_FMT_HEADER_ONLY": false,
+        "HERMES_MARGO_COMPATIBLE_RPCS": false
+      },
+      "warnings": {
+        "dev": true,
+        "deprecated": true
+      }
+    },
+    {
+      "name": "release",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_FLAGS": "-DNDEBUG -O3"
+      }
+    },
+    {
+      "name": "debug",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-Wall -Wextra -fdiagnostics-color=always -fno-inline -fstack-protector-all"
+      }
+    },
+    {
+      "name": "coverage",
+      "hidden": true,
+      "inherits": "debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Coverage",
+        "CMAKE_CXX_FLAGS_COVERAGE": "-Og -g --coverage -fkeep-static-functions",
+        "CMAKE_C_FLAGS_COVERAGE": "-Og -g --coverage -fkeep-static-functions",
+        "CMAKE_EXE_LINKER_FLAGS_COVERAGE": "--coverage",
+        "CMAKE_SHARED_LINKER_FLAGS_COVERAGE": "--coverage",
+        "CMAKE_MAP_IMPORTED_CONFIG_COVERAGE": "Coverage;RelWithDebInfo;Release;Debug;"
+      }
+    },
+    {
+      "name": "ci",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install"
+      }
+    },
+    {
+      "name": "default-debug",
+      "displayName": "Default hermes (debug)",
+      "inherits": [
+        "default",
+        "debug"
+      ]
+    },
+    {
+      "name": "default-coverage",
+      "displayName": "Default hermes (coverage)",
+      "inherits": [
+        "default",
+        "coverage"
+      ]
+    },
+    {
+      "name": "default-release",
+      "displayName": "Default hermes (release)",
+      "inherits": [
+        "default",
+        "release"
+      ]
+    },
+    {
+      "name": "ci-debug",
+      "displayName": "Default hermes (debug, CI flags)",
+      "inherits": [
+        "ci",
+        "default",
+        "debug"
+      ]
+    },
+    {
+      "name": "ci-coverage",
+      "displayName": "Default hermes (coverage, CI flags)",
+      "inherits": [
+        "ci",
+        "default",
+        "coverage"
+      ]
+    },
+    {
+      "name": "ci-release",
+      "displayName": "Default hermes (release, CI flags)",
+      "inherits": [
+        "ci",
+        "default",
+        "release"
+      ]
+    }
+  ]
+}
