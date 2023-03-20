@@ -63,7 +63,7 @@ function(_mercury_DEBUG_PRINT text)
   endif()
 endfunction()
 
-macro(_mercury_find_component _component_name)
+function(_mercury_find_component _component_name)
 
   _mercury_debug_print("Searching for Mercury component: ${_component}")
 
@@ -91,6 +91,10 @@ macro(_mercury_find_component _component_name)
     PATHS ${PC_MERCURY_LIBRARY_DIRS}
   )
 
+  if(NOT ${_upper_component}_LIBRARY_RELEASE AND NOT ${_upper_component}_LIBRARY_DEBUG)
+    return()
+  endif ()
+
   # initialize ${_upper_component}_LIBRARY (e.g. NA_LIBRARY)
   # with the appropriate library for this build configuration
   select_library_configurations(${_upper_component})
@@ -111,8 +115,7 @@ macro(_mercury_find_component _component_name)
     set_property(TARGET Mercury::${_component} APPEND PROPERTY
       IMPORTED_CONFIGURATIONS RELEASE)
     set_target_properties(Mercury::${_component} PROPERTIES
-      IMPORTED_LOCATION_RELEASE "${${_upper_component}_LIBRARY_RELEASE}"
-    )
+      IMPORTED_LOCATION_RELEASE "${${_upper_component}_LIBRARY_RELEASE}")
   endif()
 
   if(${_upper_component}_LIBRARY_DEBUG)
@@ -120,8 +123,7 @@ macro(_mercury_find_component _component_name)
       IMPORTED_CONFIGURATIONS DEBUG)
     set_target_properties(Mercury::${_component} PROPERTIES
       IMPORTED_LOCATION_DEBUG "${${_upper_component}_LIBRARY_DEBUG}"
-      IMPORTED_LINK_INTERFACE_LANGUAGES_DEBUG "C"
-    )
+      IMPORTED_LINK_INTERFACE_LANGUAGES_DEBUG "C")
   endif()
 
   set_target_properties(
@@ -141,7 +143,7 @@ macro(_mercury_find_component _component_name)
 
   mark_as_advanced(${_upper_component}_INCLUDE_DIR ${_upper_component}_LIBRARY)
 
-endmacro()
+endfunction()
 
 ###############################################################################
 # Find Mercury headers and library
@@ -246,7 +248,11 @@ if(Mercury_FOUND)
   foreach(_component ${_mercury_components})
     _mercury_find_component(${_component})
 
-    set_target_properties(Mercury::Mercury PROPERTIES
-      INTERFACE_LINK_LIBRARIES Mercury::${_component})
+    if(TARGET Mercury::${_component})
+      set_property(TARGET Mercury::Mercury
+              APPEND PROPERTY INTERFACE_LINK_LIBRARIES
+              Mercury::${_component})
+    endif ()
+
   endforeach()
 endif()

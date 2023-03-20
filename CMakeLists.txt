@@ -1,50 +1,32 @@
-cmake_minimum_required(VERSION 3.6.0)
+# 3.13+ so that we have a sensible handling of relative paths
+cmake_minimum_required(VERSION 3.13.0)
 
-# Use newer policies if available, up to most recent tested version of CMake.
-if(${CMAKE_VERSION} VERSION_LESS 3.11)
-  cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
-else()
-  cmake_policy(VERSION 3.11)
+# Define the project
+project(hermes
+        VERSION 0.4.5
+        LANGUAGES C CXX)
+
+# Print basic information about the project
+message(STATUS "[${PROJECT_NAME}] Version: ${PROJECT_VERSION}")
+message(STATUS "[${PROJECT_NAME}] Build type: ${CMAKE_BUILD_TYPE}")
+
+if(HERMES_TEST)
+  # Tests need examples to be built
+  set(HERMES_BUILD_EXAMPLES ON)
+  enable_testing()
 endif()
-
-# Determine if hermes is built as a subproject (using add_subdirectory)
-# or if it is the master project.
-set(MASTER_PROJECT OFF)
-if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-  set(MASTER_PROJECT ON)
-  message(STATUS "[hermes] CMake version: ${CMAKE_VERSION}")
-endif ()
-
-# set default build type and also populate a list of available options
-set(default_build_type "Release")
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  message(STATUS "[hermes] Setting build type to '${default_build_type}' as none was specified.")
-  set(CMAKE_BUILD_TYPE "${default_build_type}" CACHE
-      STRING "Choose the type of build." FORCE)
-  # Set the possible values of build type for cmake-gui
-  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
-    "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
-endif()
-
-# define project
-project(HERMES 
-        VERSION 0.4.5)
-
-message(STATUS "[hermes] Version: ${HERMES_VERSION}")
-message(STATUS "[hermes] Build type: ${CMAKE_BUILD_TYPE}")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
-  "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
-  "${CMAKE_CURRENT_SOURCE_DIR}/externals/sanitizers-cmake/cmake")
+# Let CMake know where to find or custom .cmake scripts
+list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Export compilation database
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Define the library
 add_library(hermes INTERFACE)
+add_library(hermes::hermes ALIAS hermes)
 
 # building the library requires (at least) C++ 11
 target_compile_features(hermes INTERFACE cxx_std_11)
@@ -53,33 +35,21 @@ include(hermes_options)
 include(hermes_flags)
 
 # set definitions and flags for debug builds
-target_compile_definitions(hermes INTERFACE 
+target_compile_definitions(hermes INTERFACE
     $<$<CONFIG:Debug>:HERMES_DEBUG_BUILD>)
 
-target_compile_options(hermes INTERFACE 
+target_compile_options(hermes INTERFACE
     $<$<CONFIG:Debug>:${HERMES_DEBUG_OPTIONS}>)
-
-# set flags common to all builds
-if(HERMES_BUILD_WERROR)
-    target_compile_options(hermes INTERFACE ${HERMES_WERROR_FLAG})
-endif()
-
-if(HERMES_BUILD_PEDANTIC)
-    target_compile_options(hermes INTERFACE ${HERMES_PEDANTIC_COMPILE_FLAGS})
-endif()
 
 target_include_directories(hermes INTERFACE
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
 target_include_directories(hermes SYSTEM INTERFACE
   $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>)
 
-if(HERMES_BUILD_EXAMPLES)
-    add_subdirectory(examples)
-endif()
-
-# 
+# Find dependencies
+find_package(Threads REQUIRED)
 find_package(Mercury REQUIRED)
-target_link_libraries(hermes INTERFACE Mercury::Mercury)
+target_link_libraries(hermes INTERFACE Threads::Threads Mercury::Mercury)
 
 if(HERMES_LOGGING)
   if(HERMES_LOGGING_FMT_HEADER_ONLY)
@@ -90,21 +60,28 @@ if(HERMES_LOGGING)
 
   target_compile_definitions(hermes INTERFACE HERMES_ENABLE_LOGGING)
 
-  if(HERMES_LOGGING_USE_BUNDLED_FMT)
-    message(STATUS "[hermes] Logging enabled using bundled fmt ${HERMES_FMT_LINK_TYPE}")
-    add_subdirectory(externals/fmt)
-    target_compile_definitions(hermes INTERFACE HERMES_LOGGING_USE_BUNDLED_FMT)
+  if(TARGET fmt::fmt AND TARGET fmt::fmt-header-only)
+    message(STATUS "[${PROJECT_NAME}] Logging enabled using external fmt ${HERMES_FMT_LINK_TYPE}")
   else()
-    if(TARGET fmt::fmt AND TARGET fmt::fmt-header-only)
-      message(STATUS "[hermes] Logging enabled using external fmt ${HERMES_FMT_LINK_TYPE}")
+    find_package(fmt 5.3)
+
+    if(fmt_FOUND)
+      message(STATUS "[${PROJECT_NAME}] Logging enabled using installed fmt ${HERMES_FMT_LINK_TYPE}")
     else()
-      message(STATUS "[hermes] Logging enabled using installed fmt ${HERMES_FMT_LINK_TYPE}")
-      find_package(fmt 5.3 REQUIRED)
+      message(STATUS "[${PROJECT_NAME}] Downloading and building {fmt}")
+      FetchContent_Declare(
+              fmt
+              GIT_REPOSITORY https://github.com/fmtlib/fmt
+              GIT_TAG d141cdbeb0fb422a3fb7173b285fd38e0d1772dc # v8.0.1
+              GIT_SHALLOW ON
+              GIT_PROGRESS ON
+      )
+      FetchContent_MakeAvailable(fmt)
     endif()
   endif()
 
-  target_link_libraries(hermes 
-      INTERFACE 
+  target_link_libraries(hermes
+      INTERFACE
       $<IF:$<BOOL:${HERMES_LOGGING_FMT_HEADER_ONLY}>,
           fmt::fmt-header-only,
           fmt::fmt>
@@ -114,7 +91,14 @@ if(HERMES_LOGGING)
 endif()
 
 if(HERMES_MARGO_COMPATIBLE_RPCS)
-    target_compile_definitions(hermes INTERFACE HERMES_MARGO_COMPATIBLE_MODE)
+  target_compile_definitions(hermes INTERFACE HERMES_MARGO_COMPATIBLE_MODE)
 endif()
 
-find_package(Sanitizers)
+if(HERMES_BUILD_EXAMPLES)
+  add_subdirectory(examples)
+endif()
+
+if(HERMES_ENABLE_TESTS)
+  add_subdirectory(tests)
+endif()
+

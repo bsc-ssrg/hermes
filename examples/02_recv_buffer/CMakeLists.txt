@@ -1,7 +1,5 @@
-find_package(Sanitizers)
-
 add_executable(02_recv_buffer_client "")
-target_sources(02_recv_buffer_client 
+target_sources(02_recv_buffer_client
     PRIVATE
         client.cpp
         rpcs.hpp
@@ -9,15 +7,14 @@ target_sources(02_recv_buffer_client
 )
 target_link_libraries(02_recv_buffer_client
     PUBLIC
-        hermes
+        hermes::hermes
     PRIVATE
         common
 )
-add_sanitizers(02_recv_buffer_client)
 target_compile_features(02_recv_buffer_client PRIVATE cxx_std_14)
 
 add_executable(02_recv_buffer_server "")
-target_sources(02_recv_buffer_server 
+target_sources(02_recv_buffer_server
     PRIVATE
         server.cpp
         rpcs.hpp
@@ -25,11 +22,10 @@ target_sources(02_recv_buffer_server
 )
 target_link_libraries(02_recv_buffer_server
     PUBLIC
-        hermes
+        hermes::hermes
     PRIVATE
         common
 )
-add_sanitizers(02_recv_buffer_server)
 target_compile_features(02_recv_buffer_server PRIVATE cxx_std_14)
 
 add_custom_command(
