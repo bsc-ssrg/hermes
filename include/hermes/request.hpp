@@ -10,6 +10,10 @@
 
 #include "logging.hpp"
 
+#ifdef HERMES_MARGO_COMPATIBLE_MODE
+#include <hermes/detail/margo_compatibility.hpp>
+#endif // HERMES_MARGO_COMPATIBLE_MODE
+
 namespace hermes {
 
 // forward declarations
@@ -128,7 +132,11 @@ public:
             hg_return_t ret = HG_SUCCESS;
 
             if(m_mercury_input) {
+#ifdef HERMES_MARGO_COMPATIBLE_MODE
+                ret = detail::margo::HG_Free_input(m_handle, m_mercury_input_cb, m_mercury_input.get());
+#else
                 ret = HG_Free_input(m_handle, m_mercury_input.get());
+#endif // HERMES_MARGO_COMPATIBLE_MODE
 
                 HERMES_DEBUG2("HG_Free_input({}, {}) = {}", 
                               fmt::ptr(m_handle), fmt::ptr(&m_mercury_input), 
@@ -149,6 +157,8 @@ private:
     std::unique_ptr<MercuryInput> m_mercury_input;
     std::unique_ptr<Input> m_input;
     bool m_requires_response;
+    constexpr static const auto m_mercury_input_cb =
+            Request::mercury_in_proc_cb;
 };
 
 

@@ -43,7 +43,7 @@ public:
             // already registered, just ignore the request
             const auto& r = m_request_types.at(id);
 
-            if(mercury_id == r->m_mercury_id && name == r->m_name &&
+            if(name == r->m_name &&
                requires_response == r->m_requires_response &&
                mercury_in_proc_cb == r->m_mercury_input_cb &&
                mercury_out_proc_cb == r->m_mercury_output_cb) {
