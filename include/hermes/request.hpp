@@ -133,12 +133,13 @@ public:
 
             if(m_mercury_input) {
 #ifdef HERMES_MARGO_COMPATIBLE_MODE
-                ret = detail::margo::HG_Free_input(m_handle, m_mercury_input_cb, m_mercury_input.get());
+                ret = detail::margo::free_input(m_handle, m_mercury_input_cb,
+                                                m_mercury_input.get());
 #else
                 ret = HG_Free_input(m_handle, m_mercury_input.get());
 #endif // HERMES_MARGO_COMPATIBLE_MODE
 
-                HERMES_DEBUG2("HG_Free_input({}, {}) = {}", 
+                HERMES_DEBUG2("margo::free_input({}, {}) = {}",
                               fmt::ptr(m_handle), fmt::ptr(&m_mercury_input), 
                               HG_Error_to_string(ret));
             }
