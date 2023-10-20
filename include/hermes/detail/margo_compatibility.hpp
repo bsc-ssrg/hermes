@@ -14,40 +14,39 @@ namespace detail {
 namespace margo {
 
 static inline hg_id_t
-HG_Register_name(hg_class_t* hg_class, const char* func_name,
+register_name(hg_class_t* hg_class, const char* func_name,
                  hg_rpc_cb_t rpc_cb) {
     return HG_Register_name_for_margo(hg_class, func_name, rpc_cb);
 }
 static inline hg_return_t
-HG_Forward(hg_handle_t handle, hg_cb_t cb, void* args, hg_proc_cb_t proc_in, void* in_struct) {
+forward(hg_handle_t handle, hg_cb_t cb, void* args, hg_proc_cb_t proc_in, void* in_struct) {
     return HG_Forward_to_margo(handle, cb, args, proc_in, in_struct);
 }
 
 static inline hg_return_t
-HG_Respond(hg_handle_t handle, hg_cb_t cb, void* args, hg_proc_cb_t proc_out, void* out_struct) {
+respond(hg_handle_t handle, hg_cb_t cb, void* args, hg_proc_cb_t proc_out, void* out_struct) {
     return HG_Respond_to_margo(handle, cb, args, proc_out, out_struct);
 }
 
 static inline hg_return_t
-HG_Get_input(hg_handle_t handle, hg_proc_cb_t proc_in, void* in_struct) {
+get_input(hg_handle_t handle, hg_proc_cb_t proc_in, void* in_struct) {
     return HG_Get_input_from_margo(handle, proc_in, in_struct);
 }
 
 static inline hg_return_t
-HG_Free_input(hg_handle_t handle, hg_proc_cb_t proc_in, void* in_struct) {
+free_input(hg_handle_t handle, hg_proc_cb_t proc_in, void* in_struct) {
     return HG_Free_input_from_margo(handle, proc_in, in_struct);
 }
 
 static inline hg_return_t
-HG_Get_output(hg_handle_t handle, hg_proc_cb_t proc_out, void* out_struct) {
+get_output(hg_handle_t handle, hg_proc_cb_t proc_out, void* out_struct) {
     return HG_Get_output_from_margo(handle, proc_out, out_struct);
 }
 
 static inline hg_return_t
-HG_Free_output(hg_handle_t handle, hg_proc_cb_t proc_out, void* out_struct) {
+free_output(hg_handle_t handle, hg_proc_cb_t proc_out, void* out_struct) {
     return HG_Free_output_from_margo(handle, proc_out, out_struct);
 }
-
 
 } // namespace margo
 } // namespace detail

@@ -129,7 +129,12 @@ register_mercury_rpc(hg_class_t* hg_class,
     hg_return_t ret{};
 #ifdef HERMES_MARGO_COMPATIBLE_MODE
     descriptor->m_mercury_id =
-            margo::HG_Register_name(hg_class, descriptor->m_name, nullptr);
+            margo::register_name(hg_class, descriptor->m_name, nullptr);
+    HERMES_DEBUG2("    HG_Register(hg_class={}, descriptor_name={}, "
+                  "ret_hg_id = {}",
+                  static_cast<void*>(hg_class),
+                  descriptor->m_name,
+                  descriptor->m_mercury_id);
 #else
     ret = HG_Register(hg_class, descriptor->m_mercury_id,
                       descriptor->m_mercury_input_cb,
@@ -151,7 +156,7 @@ register_mercury_rpc(hg_class_t* hg_class,
                             std::string(HG_Error_to_string(ret)));
     }
 #endif
-    
+
     if(descriptor->m_mercury_id == 0) {
         throw std::runtime_error(
                 "Failed to register RPC: name '" + std::string(descriptor->m_name) +
@@ -257,7 +262,8 @@ decode_mercury_input(hg_handle_t handle) {
 
     // decode input
 #ifdef HERMES_MARGO_COMPATIBLE_MODE
-    hg_return_t ret = margo::HG_Get_input(handle, Request::mercury_in_proc_cb, &hg_input);
+    hg_return_t ret =
+            margo::get_input(handle, Request::mercury_in_proc_cb, &hg_input);
 #else
     hg_return_t ret = HG_Get_input(handle, &hg_input);
 #endif // HERMES_MARGO_COMPATIBLE_MODE
@@ -286,7 +292,8 @@ decode_mercury_output(hg_handle_t handle) {
 
     // decode output
 #ifdef HERMES_MARGO_COMPATIBLE_MODE
-    hg_return_t ret = margo::HG_Get_output(handle, Request::mercury_out_proc_cb, &hg_output);
+    hg_return_t ret =
+            margo::get_output(handle, Request::mercury_out_proc_cb, &hg_output);
 #else
     hg_return_t ret = HG_Get_output(handle, &hg_output);
 #endif // HERMES_MARGO_COMPATIBLE_MODE
@@ -408,7 +415,8 @@ post_to_mercury(ExecutionContext* ctx) {
             ctx->m_output_promise.set_value(RequestOutput(hg_output));
             // clean up resources consumed by this RPC
 #ifdef HERMES_MARGO_COMPATIBLE_MODE
-            margo::HG_Free_output(cbi->info.forward.handle, Request::mercury_out_proc_cb, &hg_output);
+            margo::free_output(cbi->info.forward.handle,
+                               Request::mercury_out_proc_cb, &hg_output);
 #else
             HG_Free_output(cbi->info.forward.handle, &hg_output);
 #endif // HERMES_MARGO_COMPATIBLE_MODE
@@ -437,9 +445,8 @@ post_to_mercury(ExecutionContext* ctx) {
                 ctx->m_hg_context, ctx->m_address->mercury_address(),
                 mercury_id);
     }
-    
 #ifdef HERMES_MARGO_COMPATIBLE_MODE
-    hg_return_t ret = margo::HG_Forward(
+    hg_return_t ret = margo::forward(
             // Mercury handle
             ctx->m_handle,
             // pointer to function callback
@@ -543,7 +550,7 @@ mercury_respond(request<Input>&& req,
 #ifdef HERMES_MARGO_COMPATIBLE_MODE
     // This is just a best effort response, we don't bother specifying
     // a callback here for completion
-    hg_return_t ret = margo::HG_Respond(
+    hg_return_t ret = margo::respond(
             // handle
             req.m_handle,
             // callback
