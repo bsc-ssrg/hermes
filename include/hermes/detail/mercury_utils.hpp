@@ -3,10 +3,15 @@
 
 // C includes
 #include <mercury.h>
+#include <mercury_bulk.h>
 #include <mercury_log.h>
+
+// C++ includes
+#include <cassert>
 
 // project includes
 #include <hermes/logging.hpp>
+#include <hermes/make_unique.hpp>
 #include <hermes/request.hpp>
 #include <hermes/detail/address.hpp>
 #include <hermes/detail/execution_context.hpp>
@@ -53,16 +58,6 @@ initialize_mercury(const std::string& transport_prefix,
     if(hg_class == NULL) {
         throw std::runtime_error("Failed to initialize Mercury");
     }
-
-#ifdef HERMES_MARGO_COMPATIBLE_MODE
-    // set input offset to include Margo breadcrumbs information in Mercury
-    // requests
-    hg_return_t hret = HG_Class_set_input_offset(hg_class, sizeof(uint64_t));
-
-    // this should not ever fail
-    assert(hret == HG_SUCCESS);
-#endif // HERMES_MARGO_COMPATIBLE_MODE
-
     return hg_class;
 }
 
@@ -131,14 +126,20 @@ inline void
 register_mercury_rpc(hg_class_t* hg_class, 
                      const Descriptor& descriptor,
                      bool listen) {
-
-    hg_return_t ret = HG_Register(hg_class,
-                                  descriptor->m_mercury_id,
-                                  descriptor->m_mercury_input_cb,
-                                  descriptor->m_mercury_output_cb,
-                                  listen ? 
-                                    descriptor->m_handler : 
-                                    nullptr);
+    hg_return_t ret{};
+#ifdef HERMES_MARGO_COMPATIBLE_MODE
+    descriptor->m_mercury_id =
+            margo::register_name(hg_class, descriptor->m_name, nullptr);
+    HERMES_DEBUG2("    HG_Register(hg_class={}, descriptor_name={}, "
+                  "ret_hg_id = {}",
+                  static_cast<void*>(hg_class),
+                  descriptor->m_name,
+                  descriptor->m_mercury_id);
+#else
+    ret = HG_Register(hg_class, descriptor->m_mercury_id,
+                      descriptor->m_mercury_input_cb,
+                      descriptor->m_mercury_output_cb,
+                      listen ? descriptor->m_handler : nullptr);
 
     HERMES_DEBUG2("    HG_Register(hg_class={}, hg_id={}, in_proc_cb={}, "
                   "out_proc_cb={}, rpc_cb={}) = {}",
@@ -153,6 +154,14 @@ register_mercury_rpc(hg_class_t* hg_class,
         throw std::runtime_error("Failed to register RPC '" +
                             std::string(descriptor->m_name) + "': " +
                             std::string(HG_Error_to_string(ret)));
+    }
+#endif
+
+    if(descriptor->m_mercury_id == 0) {
+        throw std::runtime_error(
+                "Failed to register RPC: name '" + std::string(descriptor->m_name) +
+                "' : " + "id: '" + std::to_string(descriptor->m_mercury_id) +
+                "' is invalid");
     }
 
     if(!descriptor->m_requires_response) {
@@ -252,7 +261,12 @@ decode_mercury_input(hg_handle_t handle) {
     MercuryInput hg_input;
 
     // decode input
+#ifdef HERMES_MARGO_COMPATIBLE_MODE
+    hg_return_t ret =
+            margo::get_input(handle, Request::mercury_in_proc_cb, &hg_input);
+#else
     hg_return_t ret = HG_Get_input(handle, &hg_input);
+#endif // HERMES_MARGO_COMPATIBLE_MODE
 
     if(ret != HG_SUCCESS) {
         throw std::runtime_error("Failed to decode request input data: " +
@@ -277,7 +291,12 @@ decode_mercury_output(hg_handle_t handle) {
     MercuryOutput hg_output;
 
     // decode output
+#ifdef HERMES_MARGO_COMPATIBLE_MODE
+    hg_return_t ret =
+            margo::get_output(handle, Request::mercury_out_proc_cb, &hg_output);
+#else
     hg_return_t ret = HG_Get_output(handle, &hg_output);
+#endif // HERMES_MARGO_COMPATIBLE_MODE
 
     if(ret != HG_SUCCESS) {
         throw std::runtime_error("Failed to decode request output data: " +
@@ -395,7 +414,12 @@ post_to_mercury(ExecutionContext* ctx) {
 
             ctx->m_output_promise.set_value(RequestOutput(hg_output));
             // clean up resources consumed by this RPC
+#ifdef HERMES_MARGO_COMPATIBLE_MODE
+            margo::free_output(cbi->info.forward.handle,
+                               Request::mercury_out_proc_cb, &hg_output);
+#else
             HG_Free_output(cbi->info.forward.handle, &hg_output);
+#endif // HERMES_MARGO_COMPATIBLE_MODE
         }
 
         HG_Destroy(cbi->info.forward.handle);
@@ -409,40 +433,31 @@ post_to_mercury(ExecutionContext* ctx) {
     // just reuse the old one since the Mercury documentation states that 
     // this is safe to do
     if(ctx->m_handle == HG_HANDLE_NULL) {
-        // create a Mercury handle for the RPC and save it in the RPC's 
-        // execution context
-        ctx->m_handle = 
-            detail::create_mercury_handle(ctx->m_hg_context,
-                                          ctx->m_address->mercury_address(),
-                                          Request::mercury_id);
-    }
-
 #ifdef HERMES_MARGO_COMPATIBLE_MODE
-    const struct hg_info* hgi = HG_Get_info(ctx->m_handle);
-    hg_id_t id = margo::mux_id(hgi->id, MARGO_DEFAULT_PROVIDER_ID);
-
-    hg_return hret = HG_Reset(ctx->m_handle, hgi->addr, id);
-
-    if(hret != HG_SUCCESS) {
-        HERMES_ERROR("Failed to reset RPC handle");
-        return hret;
-    }
-
-    // add rpc breadcrumb to outbound request; this will be used to track
-    // rpc statistics
-    uint64_t* rpc_breadcrumb;
-
-    hret = HG_Get_input_buf(ctx->m_handle, (void**)&rpc_breadcrumb, NULL);
-
-    if(hret != HG_SUCCESS) {
-        HERMES_ERROR("Failed to retrieve RPC input buffer");
-        return hret;
-    }
-
-    uint64_t bc = margo::breadcrumb_set(hgi->id);
-    *rpc_breadcrumb = htole64(bc);
+        hg_id_t mercury_id = detail::registered_requests().at(Request::public_id)->m_mercury_id;
+        HERMES_DEBUG("Creating Mercury handle with id {}", mercury_id);
+#else
+        hg_id_t mercury_id = Request::mercury_id;
 #endif // HERMES_MARGO_COMPATIBLE_MODE
-
+        // create a Mercury handle for the RPC and save it in the RPC's
+        // execution context
+        ctx->m_handle = detail::create_mercury_handle(
+                ctx->m_hg_context, ctx->m_address->mercury_address(),
+                mercury_id);
+    }
+#ifdef HERMES_MARGO_COMPATIBLE_MODE
+    hg_return_t ret = margo::forward(
+            // Mercury handle
+            ctx->m_handle,
+            // pointer to function callback
+            completion_callback,
+            // pointer to data passed to callback
+            reinterpret_cast<void*>(ctx),
+            // pointer to input proc function
+            Request::mercury_in_proc_cb,
+            // pointer to input structure
+            &ctx->m_mercury_input);
+#else
     hg_return_t ret = HG_Forward(
             // Mercury handle
             ctx->m_handle,
@@ -452,6 +467,7 @@ post_to_mercury(ExecutionContext* ctx) {
             reinterpret_cast<void*>(ctx),
             // pointer to input structure
             &ctx->m_mercury_input);
+#endif // HERMES_MARGO_COMPATIBLE_MODE
 
     HERMES_DEBUG2("HG_Forward(handle={}, cb={}, arg={}, input={}) = {}",
                   fmt::ptr(ctx->m_handle), 
@@ -531,6 +547,21 @@ template <typename Input, typename Output>
 inline void
 mercury_respond(request<Input>&& req, 
                 Output&& out) {
+#ifdef HERMES_MARGO_COMPATIBLE_MODE
+    // This is just a best effort response, we don't bother specifying
+    // a callback here for completion
+    hg_return_t ret = margo::respond(
+            // handle
+            req.m_handle,
+            // callback
+            NULL,
+            // arg
+            NULL,
+            // pointer to proc function
+            Output::mercury_out_proc_cb,
+            // output struct
+            &out);
+#else
 
     // This is just a best effort response, we don't bother specifying
     // a callback here for completion
@@ -543,6 +574,7 @@ mercury_respond(request<Input>&& req,
                             NULL,
                             // output struct
                             &out);
+#endif // HERMES_MARGO_COMPATIBLE_MODE
 
     HERMES_DEBUG2("HG_Respond(hg_handle={}, callback={}, arg={}, "
                   "out_struct={}) = {}", fmt::ptr(req.m_handle), "NULL", 

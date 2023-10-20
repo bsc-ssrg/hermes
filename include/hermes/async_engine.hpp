@@ -681,14 +681,14 @@ private:
             // auto&& id = kv.first;
             auto&& descriptor = kv.second;
 
-            HERMES_DEBUG("**** registered: {}, {}, {}, {}, {}", 
+            detail::register_mercury_rpc(m_hg_class, descriptor, m_listen);
+
+            HERMES_DEBUG("**** registered: {}, {}, {}, {}, {}",
                     descriptor->m_id,
                     descriptor->m_mercury_id,
                     descriptor->m_name,
                     reinterpret_cast<void*>(descriptor->m_mercury_input_cb),
                     reinterpret_cast<void*>(descriptor->m_mercury_output_cb));
-
-            detail::register_mercury_rpc(m_hg_class, descriptor, m_listen);
         }
     }
 

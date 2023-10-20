@@ -91,7 +91,9 @@ if(HERMES_LOGGING)
 endif()
 
 if(HERMES_MARGO_COMPATIBLE_RPCS)
+  find_package(Margo-hg-shim REQUIRED)
   target_compile_definitions(hermes INTERFACE HERMES_MARGO_COMPATIBLE_MODE)
+  target_link_libraries(hermes INTERFACE Margo::Margo-hg-shim)
 endif()
 
 if(HERMES_BUILD_EXAMPLES)
