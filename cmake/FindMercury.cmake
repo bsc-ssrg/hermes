@@ -151,7 +151,7 @@ endfunction()
 
 include(SelectLibraryConfigurations)
 
-set(_mercury_components na mchecksum mercury_util mercury_hl)
+set(_mercury_components na mchecksum mercury_util)
 
 # prevent repeating work if the main CMakeLists.txt already called
 # find_package(PkgConfig)

@@ -18,6 +18,8 @@
 #include <memory>
 #include <stdarg.h>
 
+inline auto format_as(hg_return_t f) { return fmt::underlying(f); }
+
 namespace hermes {
 
 namespace detail {
